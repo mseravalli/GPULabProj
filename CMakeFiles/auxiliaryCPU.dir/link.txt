@@ -1,1 +1,0 @@
-/usr/bin/c++  -fPIC  -fopenmp -Wall -O3   -shared -Wl,-soname,libauxiliaryCPU.so -o lib/libauxiliaryCPU.so CMakeFiles/auxiliaryCPU.dir/src/auxiliary/debug.o -L/work/sdks/cudaversions/cuda50/samples/lib -L/work/sdks/cudaversions/cuda50/samples/../shared/lib -L/usr/lib/nvidia-current -L/work/sdks/opencv-2.4.2/lib 
