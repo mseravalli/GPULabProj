@@ -238,7 +238,72 @@ __global__ void sorflow_nonlinear_warp_sor_shared
 	int    pitchf1
 )
 {
-	// ### Implement Me ###
+
+  // TODO define the indices and verify correctness
+
+  // current element
+  int x = 0;
+  int y = 0;
+
+  // element at next position
+  unsigned int x_1 = x==0 ? x : x-1;
+  unsigned int y_1 = y==0 ? y : y-1;
+
+  // element at previous position
+  unsigned int x1 = x==nx-1 ? x : x+1;
+  unsigned int y1 = y==ny-1 ? y : y+1;
+
+  unsigned int p = y*nx+x;
+
+  // TODO check validity of declarations
+  // ???
+  const float hx_1 = 1.0f / (2.0f*hx);
+  const float hy_1 = 1.0f / (2.0f*hy);
+  const float hx_2 = lambda/(hx*hx);
+  const float hy_2 = lambda/(hy*hy);
+
+  // TODO use the texture here
+  // calculate the gradient average between 2 resolutions
+  float Ix = 0.5f;
+  float Iy = 0.5f;
+//float Ix = 0.5f*(_I2warp[y*nx+x1]-_I2warp[y*nx+x_1] +
+//		_I1pyramid->level[rec_depth][y*nx+x1]-_I1pyramid->level[rec_depth][y*nx+x_1])*hx_1;
+//float Iy = 0.5f*(_I2warp[y1*nx+x]-_I2warp[y_1*nx+x] +
+//		_I1pyramid->level[rec_depth][y1*nx+x]-_I1pyramid->level[rec_depth][y_1*nx+x])*hy_1;
+  
+  // p = plus, m = minus
+  // average penality of current and previous / current and next
+  // why is this needed ???
+  float xp = x<nx-1 ? (penaltyr_g[y*nx+x1] +penaltyr_g[y*nx+x])*0.5f*hx_2 : 0.0f;
+  float xm = x>0    ? (penaltyr_g[y*nx+x_1]+penaltyr_g[y*nx+x])*0.5f*hx_2 : 0.0f;
+  float yp = y<ny-1 ? (penaltyr_g[y1*nx+x] +penaltyr_g[y*nx+x])*0.5f*hy_2 : 0.0f;
+  float ym = y>0    ? (penaltyr_g[y_1*nx+x]+penaltyr_g[y*nx+x])*0.5f*hy_2 : 0.0f;
+  float sum = xp + xm + yp + ym;
+  
+  // TODO load d*_g into shared memory????
+
+  // TODO eventually put this if at first pos. in order to reduce computations
+  // SOR update adopt Dirichlet boundary conditions
+  if((x+y)%2==red){
+  	float u1new  = (1.0f-relaxation)*du_g[p] + relaxation *
+  			(bu_g[p] - penaltyd_g[p] * Ix*Iy * dv_g[p]
+  			+ (x>0    ? xm*du_g[y*nx+x_1] : 0.0f)
+  			+ (x<nx-1 ? xp*du_g[y*nx+x1]  : 0.0f)
+  			+ (y>0    ? ym*du_g[y_1*nx+x] : 0.0f)
+  			+ (y<ny-1 ? yp*du_g[y1*nx+x]  : 0.0f)
+  			) / (penaltyd_g[p] * Ix*Ix + sum);
+  
+  	float u2new = (1.0f-relaxation)*dv_g[p] + relaxation *
+  			(bv_g[p] - penaltyd_g[p] * Ix*Iy * du_g[p]
+  			+ (x>0    ? xm*dv_g[y*nx+x_1] : 0.0f)
+  			+ (x<nx-1 ? xp*dv_g[y*nx+x1]  : 0.0f)
+  			+ (y>0    ? ym*dv_g[y_1*nx+x] : 0.0f)
+  			+ (y<ny-1 ? yp*dv_g[y1*nx+x]  : 0.0f))
+  			/ (penaltyd_g[p] * Iy*Iy + sum);
+  	du_g[p] = u1new;
+  	dv_g[p] = u2new;
+  }
+
 }
 
 /**
@@ -295,7 +360,39 @@ void sorflow_gpu_nonlinear_warp_level
 		float diff_epsilon
 )
 {
-	// ### Implement Me ###
+  int red = 0;
+
+  // TODO check dimensions: for now it's just copy pasta
+  // grid and block dimensions
+	int ngx = (nx%SF_BW) ? ((nx/SF_BW)+1) : (nx/SF_BW);
+	int ngy = (ny%SF_BH) ? ((ny/SF_BH)+1) : (ny/SF_BH);
+	dim3 dimGrid(ngx,ngy);
+	dim3 dimBlock(SF_BW,SF_BH);
+
+  for(int i=0; i<outer_iterations ;i++){
+
+    //Update Robustifications
+    // sorflow_update_robustifications_warp_tex_shared
+    //Update Righthand Side
+    // sorflow_update_righthandside_shared
+
+    for(int j=0; j<inner_iterations; j++){
+      
+      // TODO try to optimize this process: like this half of the processes idle
+      red = 0;
+      sorflow_nonlinear_warp_sor_shared <<<dimGrid,dimBlock>>>
+        ( bu_g, bv_g, penaltyd_g, penaltyr_g, du_g, dv_g, nx, ny, hx, hy, 
+          lambda, overrelaxation, red, pitchf1 );
+
+      red = 1;
+      sorflow_nonlinear_warp_sor_shared <<<dimGrid,dimBlock>>>
+        ( bu_g, bv_g, penaltyd_g, penaltyr_g, du_g, dv_g, nx, ny, hx, hy, 
+          lambda, overrelaxation, red, pitchf1 );
+
+    }
+
+  }
+
 }
 
 

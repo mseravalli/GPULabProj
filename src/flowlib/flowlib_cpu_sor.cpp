@@ -178,6 +178,7 @@ float FlowLibCpuSOR::computeFlow()
 
 				for(unsigned int j=0;j<_ii;j++){
 
+          // update of red cells
 					for(unsigned int x=0;x<nx_fine;x++){
 						unsigned int x_1 = x==0     ? x : x-1;
 						unsigned int x1 = x==nx_fine-1 ? x : x+1;
@@ -219,6 +220,8 @@ float FlowLibCpuSOR::computeFlow()
 							}
 						}
 					}
+
+          // update of black cells
 					for(unsigned int x=0;x<nx_fine;x++){
 						unsigned int x_1 = x==0     ? x : x-1;
 						unsigned int x1 = x==nx_fine-1 ? x : x+1;
