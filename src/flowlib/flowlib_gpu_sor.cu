@@ -242,8 +242,8 @@ __global__ void sorflow_nonlinear_warp_sor_shared
   // TODO define the indices and verify correctness
 
   // current element
-  int x = 0;
-  int y = 0;
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
 
   // element at next position
   unsigned int x_1 = x==0 ? x : x-1;
@@ -262,14 +262,10 @@ __global__ void sorflow_nonlinear_warp_sor_shared
   const float hx_2 = lambda/(hx*hx);
   const float hy_2 = lambda/(hy*hy);
 
-  // TODO use the texture here
+  // TODO make it right!! 
   // calculate the gradient average between 2 resolutions
-  float Ix = 0.5f;
-  float Iy = 0.5f;
-//float Ix = 0.5f*(_I2warp[y*nx+x1]-_I2warp[y*nx+x_1] +
-//		_I1pyramid->level[rec_depth][y*nx+x1]-_I1pyramid->level[rec_depth][y*nx+x_1])*hx_1;
-//float Iy = 0.5f*(_I2warp[y1*nx+x]-_I2warp[y_1*nx+x] +
-//		_I1pyramid->level[rec_depth][y1*nx+x]-_I1pyramid->level[rec_depth][y_1*nx+x])*hy_1;
+  float Ix = 0.5f*(tex2D(tex_flow_sor_I2, x1, y) - tex2D(tex_flow_sor_I2, x_1, y) + tex2D(tex_flow_sor_I1, x1, y) - tex2D(tex_flow_sor_I1, x_1, y))*hx_1;
+  float Iy = 0.5f*(tex2D(tex_flow_sor_I2, x, y1) - tex2D(tex_flow_sor_I2, x, y_1) +	tex2D(tex_flow_sor_I1, x, y1) - tex2D(tex_flow_sor_I1, x, y_1))*hy_1;
   
   // p = plus, m = minus
   // average penality of current and previous / current and next
@@ -360,7 +356,7 @@ void sorflow_gpu_nonlinear_warp_level
 		float diff_epsilon
 )
 {
-  int red = 0;
+  bool red = 0;
 
   // TODO check dimensions: for now it's just copy pasta
   // grid and block dimensions
@@ -378,7 +374,7 @@ void sorflow_gpu_nonlinear_warp_level
 
     for(int j=0; j<inner_iterations; j++){
       
-      // TODO try to optimize this process: like this half of the processes idle
+      // TODO check the effective dimension of the blocks
       red = 0;
       sorflow_nonlinear_warp_sor_shared <<<dimGrid,dimBlock>>>
         ( bu_g, bv_g, penaltyd_g, penaltyr_g, du_g, dv_g, nx, ny, hx, hy, 
@@ -399,5 +395,15 @@ void sorflow_gpu_nonlinear_warp_level
 float FlowLibGpuSOR::computeFlow()
 {
 	// ### Implement Me###
+  // TODO dummy implementation just as proof of concept
+  bind_textures(_I1, _I2, _nx, _ny, _pitchf1);
+  textures_flow_sor_initialized = true;
+
+  // TODO dummy implementation just as proof of concept
+  // need to swap I2 and I1 ??? 
+  update_textures_flow_sor(_I2, _nx, _ny, _pitchf1);
+
+  unbind_textures_flow_sor();
+  textures_flow_sor_initialized = true;
 }
 
