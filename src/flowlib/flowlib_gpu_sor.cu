@@ -154,7 +154,104 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 	int    pitchf1
 )
 {
-	// ### Implement Me###
+	  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	  const int tx = threadIdx.x+1;
+	  const int ty = threadIdx.y+1;
+	  const int idx = y*pitchf1 + x;
+
+	  __shared__ float s_u1[SF_BW+2][SF_BH+2];
+	  __shared__ float s_u2[SF_BW+2][SF_BH+2];
+	  __shared__ float s_u1lvl[SF_BW+2][SF_BH+2];
+	  __shared__ float s_u2lvl[SF_BW+2][SF_BH+2];
+	  
+	  // load data into shared memory
+	  if (x < nx && y < ny) {
+	    s_u1[tx][ty] = u_g[idx];
+	    s_u2[tx][ty] = v_g[idx];
+	    s_u1lvl[tx][ty] = du_g[idx];
+	    s_u2lvl[tx][ty] = dv_g[idx];
+	    
+	    if (x == 0) {
+		    s_u1[0][ty] = s_u1[tx][ty];
+		    s_u2[0][ty] = s_u2[tx][ty];
+		    s_u1lvl[0][ty] = s_u1lvl[tx][ty];
+		    s_u2lvl[0][ty] = s_u2lvl[tx][ty];
+	    }
+	    else if (threadIdx.x == 0) {
+		    s_u1[0][ty] = u_g[idx-1];
+		    s_u2[0][ty] = v_g[idx-1];
+		    s_u1lvl[0][ty] = du_g[idx-1];
+		    s_u2lvl[0][ty] = dv_g[idx-1];
+	    }
+	      
+	    if (x == nx-1) {
+		    s_u1[tx+1][ty] = s_u1[tx][ty];
+		    s_u2[tx+1][ty] = s_u2[tx][ty];
+		    s_u1lvl[tx+1][ty] = s_u1lvl[tx][ty];
+		    s_u2lvl[tx+1][ty] = s_u2lvl[tx][ty];
+	    }
+	    else if (threadIdx.x == blockDim.x-1) {
+		    s_u1[tx+1][ty] = u_g[idx+1];
+		    s_u2[tx+1][ty] = v_g[idx+1];
+		    s_u1lvl[tx+1][ty] = du_g[idx+1];
+		    s_u2lvl[tx+1][ty] = dv_g[idx+1];
+	    }
+
+	    if (y == 0) {
+		    s_u1[tx][0] = s_u1[tx][ty];
+		    s_u2[tx][0] = s_u2[tx][ty];
+		    s_u1lvl[tx][0] = s_u1lvl[tx][ty];
+		    s_u2lvl[tx][0] = s_u2lvl[tx][ty];
+	    }
+	    else if (threadIdx.y == 0) {
+		    s_u1[tx][0] = u_g[idx-pitchf1];
+		    s_u2[tx][0] = v_g[idx-pitchf1];
+		    s_u1lvl[tx][0] = du_g[idx-pitchf1];
+		    s_u2lvl[tx][0] = dv_g[idx-pitchf1];
+	    }
+	      
+	    if (y == ny-1) {
+		    s_u1[tx][ty+1] = s_u1[tx][ty];
+		    s_u2[tx][ty+1] = s_u2[tx][ty];
+		    s_u1lvl[tx][ty+1] = s_u1lvl[tx][ty];
+		    s_u2lvl[tx][ty+1] = s_u2lvl[tx][ty];
+	    } 
+	    else if (threadIdx.y == blockDim.y-1) {
+		    s_u1[tx][ty+1] = u_g[idx+pitchf1];
+		    s_u2[tx][ty+1] = v_g[idx+pitchf1];
+		    s_u1lvl[tx][ty+1] = du_g[idx+pitchf1];
+		    s_u2lvl[tx][ty+1] = dv_g[idx+pitchf1];
+	    }
+	  }
+
+	  __syncthreads();
+	  
+	//Update Robustifications
+	// for(unsigned int x=0;x<nx_fine;x++){
+	// 	unsigned int x_1 = x==0     ? x : x-1;
+	// 	unsigned int x1 = x==nx_fine-1 ? x : x+1;
+	// 	for(unsigned int y=0;y<ny_fine;y++){
+	// 		unsigned int y_1 = y==0     ? y : y-1;
+	// 		unsigned int y1 = y==ny_fine-1 ? y : y+1;
+
+	// 		float Ix = 0.5f*(_I2warp[y*nx_fine+x1]-_I2warp[y*nx_fine+x_1] +
+	// 				_I1pyramid->level[rec_depth][y*nx_fine+x1]-_I1pyramid->level[rec_depth][y*nx_fine+x_1])*hx_1;
+	// 		float Iy = 0.5f*(_I2warp[y1*nx_fine+x]-_I2warp[y_1*nx_fine+x] +
+	// 				_I1pyramid->level[rec_depth][y1*nx_fine+x]-_I1pyramid->level[rec_depth][y_1*nx_fine+x])*hy_1;
+	// 		float It = _I2warp[y*nx_fine+x] - _I1pyramid->level[rec_depth][y*nx_fine+x];
+
+	// 		double dxu = (_u1[y*nx_fine+x1] - _u1[y*nx_fine+x_1] + _u1lvl[y*nx_fine+x1] - _u1lvl[y*nx_fine+x_1])*hx_1;
+	// 		double dyu = (_u1[y1*nx_fine+x] - _u1[y_1*nx_fine+x] + _u1lvl[y1*nx_fine+x] - _u1lvl[y_1*nx_fine+x])*hy_1;
+	// 		double dxv = (_u2[y*nx_fine+x1] - _u2[y*nx_fine+x_1] + _u2lvl[y*nx_fine+x1] - _u2lvl[y*nx_fine+x_1])*hx_1;
+	// 		double dyv = (_u2[y1*nx_fine+x] - _u2[y_1*nx_fine+x] + _u2lvl[y1*nx_fine+x] - _u2lvl[y_1*nx_fine+x])*hy_1;
+
+	// 		double dataterm = _u1lvl[y*nx_fine+x]*Ix + _u2lvl[y*nx_fine+x]*Iy + It;
+	// 		_penDat[y*nx_fine+x] = 1.0f / sqrt(dataterm*dataterm + _dat_epsilon);
+	// 		_penReg[y*nx_fine+x] = 1.0f / sqrt(dxu*dxu + dxv*dxv + dyu*dyu + dyv*dyv + _reg_epsilon);
+
+	// 	}
+	// }
 }
 
 
