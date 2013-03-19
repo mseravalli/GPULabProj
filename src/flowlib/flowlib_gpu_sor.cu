@@ -20,7 +20,9 @@
 //#include <flowlib_gpu_sor.hpp>
 #include "flowlib.hpp"
 #include <auxiliary/cuda_basic.cuh>
-#include <linearoperations/linearoperations.cuh>
+//#include <linearoperations/linearoperations.cuh>
+//TODO use cuh instead
+#include <linearoperations/linearoperations.h>
 #include <auxiliary/debug.hpp>
 
 cudaChannelFormatDesc flow_sor_float_tex = cudaCreateChannelDesc<float>();
@@ -394,16 +396,112 @@ void sorflow_gpu_nonlinear_warp_level
 
 float FlowLibGpuSOR::computeFlow()
 {
-	// ### Implement Me###
+
+
+
+
+
+
+	float lambda = _lambda * 255.0f;
+
+	int   max_rec_depth;
+	int   warp_max_levels;
+	int   rec_depth;
+
+	warp_max_levels = computeMaxWarpLevels();
+
+  max_rec_depth = (((_start_level+1) < warp_max_levels) ?
+                    (_start_level+1) : warp_max_levels) -1;
+
+  if(max_rec_depth >= _I1pyramid->nl){
+  	max_rec_depth = _I1pyramid->nl-1;
+  }
+
+	if(_verbose) fprintf(stderr,"\nFlow GPU SOR Relaxation: %f",_overrelaxation);
+
+  unsigned int nx_fine, ny_fine, nx_coarse=0, ny_coarse=0;
+
+	float hx_fine;
+	float hy_fine;
+
+  for(unsigned int p=0;p<_nx*_ny;p++){
+  	_u1[p] = _u2[p] = 0.0f;
+  }
+
   // TODO dummy implementation just as proof of concept
   bind_textures(_I1, _I2, _nx, _ny, _pitchf1);
   textures_flow_sor_initialized = true;
 
-  // TODO dummy implementation just as proof of concept
-  // need to swap I2 and I1 ??? 
-  update_textures_flow_sor(_I2, _nx, _ny, _pitchf1);
+
+	for(rec_depth = max_rec_depth; rec_depth >= 0; rec_depth--)	{
+
+		if(_verbose) fprintf(stderr," Level %i",rec_depth);
+
+		nx_fine = _I1pyramid->nx[rec_depth];
+		ny_fine = _I1pyramid->ny[rec_depth];
+
+		hx_fine=(float)_nx/(float)nx_fine;
+		hy_fine=(float)_ny/(float)ny_fine;
+
+		const float hx_1 = 1.0f / (2.0f*hx_fine);
+		const float hy_1 = 1.0f / (2.0f*hy_fine);
+		const float hx_2 = lambda/(hx_fine*hx_fine);
+		const float hy_2 = lambda/(hy_fine*hy_fine);
+
+		if(_debug){
+			sprintf(_debugbuffer,"debug/CI1 %i.png",rec_depth);
+			saveFloatImage(_debugbuffer,_I1pyramid->level[rec_depth],nx_fine,ny_fine,1,1.0f,-1.0f);
+			sprintf(_debugbuffer,"debug/CI2 %i.png",rec_depth);
+			saveFloatImage(_debugbuffer,_I2pyramid->level[rec_depth],nx_fine,ny_fine,1,1.0f,-1.0f);
+		}
+
+		if(rec_depth < max_rec_depth)	{
+			resampleAreaParallelizableSeparate(_u1,_u1,nx_coarse,ny_coarse,nx_fine,ny_fine,_b1);
+			resampleAreaParallelizableSeparate(_u2,_u2,nx_coarse,ny_coarse,nx_fine,ny_fine,_b2);
+		}
+
+    // TODO dummy implementation just as proof of concept
+    // need to swap I2 and I1 ??? 
+    update_textures_flow_sor(_I2, _nx, _ny, _pitchf1);
+
+		if(rec_depth >= _end_level){
+			backwardRegistrationBilinearFunction(_I2pyramid->level[rec_depth],_I2warp,
+					_u1,_u2,_I1pyramid->level[rec_depth],
+					nx_fine,ny_fine,hx_fine,hy_fine);
+
+			if(_debug){
+				sprintf(_debugbuffer,"debug/CW2 %i.png",rec_depth);
+				saveFloatImage(_debugbuffer,_I2warp,nx_fine,ny_fine,1,1.0f,-1.0f);
+			}
+
+			for(unsigned int p=0;p<nx_fine*ny_fine;p++) { 
+        _u1lvl[p] = _u2lvl[p] = 0.0f;
+      }
+
+      // TODO check the validity of the passed arguments, hx and hy specifically
+      sorflow_gpu_nonlinear_warp_level ( _u1, _u2, _u1lvl, _u2lvl, _b1, _b2, 
+                                         _penDat, _penReg, _nx, _ny, _pitchf1,
+                                         hx_fine, hy_fine, _lambda, _overrelaxation, 
+                                         _oi, _ii, _dat_epsilon, _reg_epsilon);
+
+			for(unsigned int p=0;p<nx_fine*ny_fine;p++){
+				_u1[p] += _u1lvl[p];
+				_u2[p] += _u2lvl[p];
+			}
+		}
+		else{
+			if(_verbose) fprintf(stderr," skipped");
+		}
+		nx_coarse = nx_fine;
+		ny_coarse = ny_fine;
+	}
+
+	if(_debug) delete [] _debugbuffer;
 
   unbind_textures_flow_sor();
   textures_flow_sor_initialized = true;
+
+	//TODO: Timer
+	return -1.0f;
 }
 
