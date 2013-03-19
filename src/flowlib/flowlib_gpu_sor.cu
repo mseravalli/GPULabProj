@@ -162,76 +162,72 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 {
 	  const int x = blockIdx.x * blockDim.x + threadIdx.x;
 	  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	  const float hx_1 = 1.0f / (2.0f*hx);
+	  const float hy_1 = 1.0f / (2.0f*hy);
 	  if (x < nx && y < ny) {
-		  const int tx = threadIdx.x + 1;
-		  const int ty = threadIdx.y + 1;
-		  const int idx = y*pitchf1 + x;
-	
-		  __shared__ float s_u1[SF_BW+2][SF_BH+2];
-		  __shared__ float s_u2[SF_BW+2][SF_BH+2];
-		  __shared__ float s_u1lvl[SF_BW+2][SF_BH+2];
-		  __shared__ float s_u2lvl[SF_BW+2][SF_BH+2];
+		const int tx = threadIdx.x + 1;
+		const int ty = threadIdx.y + 1;
+		const int idx = y * pitchf1 + x;
+
+		__shared__ float s_u1[SF_BW+2][SF_BH+2];
+		__shared__ float s_u2[SF_BW+2][SF_BH+2];
+		__shared__ float s_u1lvl[SF_BW+2][SF_BH+2];
+		__shared__ float s_u2lvl[SF_BW+2][SF_BH+2];
 		  
 		  // load data into shared memory
-		  if (x < nx && y < ny) {
-			s_u1[tx][ty] = u_g[idx];
-			s_u2[tx][ty] = v_g[idx];
-			s_u1lvl[tx][ty] = du_g[idx];
-			s_u2lvl[tx][ty] = dv_g[idx];
-			
-			if (x == 0) {
-				s_u1[0][ty] = s_u1[tx][ty];
-				s_u2[0][ty] = s_u2[tx][ty];
-				s_u1lvl[0][ty] = s_u1lvl[tx][ty];
-				s_u2lvl[0][ty] = s_u2lvl[tx][ty];
-			}
-			else if (threadIdx.x == 0) {
-				s_u1[0][ty] = u_g[idx-1];
-				s_u2[0][ty] = v_g[idx-1];
-				s_u1lvl[0][ty] = du_g[idx-1];
-				s_u2lvl[0][ty] = dv_g[idx-1];
-			}
-			  
-			if (x == nx-1) {
-				s_u1[tx+1][ty] = s_u1[tx][ty];
-				s_u2[tx+1][ty] = s_u2[tx][ty];
-				s_u1lvl[tx+1][ty] = s_u1lvl[tx][ty];
-				s_u2lvl[tx+1][ty] = s_u2lvl[tx][ty];
-			}
-			else if (threadIdx.x == blockDim.x-1) {
-				s_u1[tx+1][ty] = u_g[idx+1];
-				s_u2[tx+1][ty] = v_g[idx+1];
-				s_u1lvl[tx+1][ty] = du_g[idx+1];
-				s_u2lvl[tx+1][ty] = dv_g[idx+1];
-			}
-	
-			if (y == 0) {
-				s_u1[tx][0] = s_u1[tx][ty];
-				s_u2[tx][0] = s_u2[tx][ty];
-				s_u1lvl[tx][0] = s_u1lvl[tx][ty];
-				s_u2lvl[tx][0] = s_u2lvl[tx][ty];
-			}
-			else if (threadIdx.y == 0) {
-				s_u1[tx][0] = u_g[idx-pitchf1];
-				s_u2[tx][0] = v_g[idx-pitchf1];
-				s_u1lvl[tx][0] = du_g[idx-pitchf1];
-				s_u2lvl[tx][0] = dv_g[idx-pitchf1];
-			}
-			  
-			if (y == ny-1) {
-				s_u1[tx][ty+1] = s_u1[tx][ty];
-				s_u2[tx][ty+1] = s_u2[tx][ty];
-				s_u1lvl[tx][ty+1] = s_u1lvl[tx][ty];
-				s_u2lvl[tx][ty+1] = s_u2lvl[tx][ty];
-			} 
-			else if (threadIdx.y == blockDim.y-1) {
-				s_u1[tx][ty+1] = u_g[idx+pitchf1];
-				s_u2[tx][ty+1] = v_g[idx+pitchf1];
-				s_u1lvl[tx][ty+1] = du_g[idx+pitchf1];
-				s_u2lvl[tx][ty+1] = dv_g[idx+pitchf1];
-			}
-		  }
-	
+		s_u1[tx][ty] = u_g[idx];
+		s_u2[tx][ty] = v_g[idx];
+		s_u1lvl[tx][ty] = du_g[idx];
+		s_u2lvl[tx][ty] = dv_g[idx];
+
+		if (x == 0) {
+			s_u1[0][ty] = s_u1[tx][ty];
+			s_u2[0][ty] = s_u2[tx][ty];
+			s_u1lvl[0][ty] = s_u1lvl[tx][ty];
+			s_u2lvl[0][ty] = s_u2lvl[tx][ty];
+		} else if (threadIdx.x == 0) {
+			s_u1[0][ty] = u_g[idx - 1];
+			s_u2[0][ty] = v_g[idx - 1];
+			s_u1lvl[0][ty] = du_g[idx - 1];
+			s_u2lvl[0][ty] = dv_g[idx - 1];
+		}
+
+		if (x == nx - 1) {
+			s_u1[tx + 1][ty] = s_u1[tx][ty];
+			s_u2[tx + 1][ty] = s_u2[tx][ty];
+			s_u1lvl[tx + 1][ty] = s_u1lvl[tx][ty];
+			s_u2lvl[tx + 1][ty] = s_u2lvl[tx][ty];
+		} else if (threadIdx.x == blockDim.x - 1) {
+			s_u1[tx + 1][ty] = u_g[idx + 1];
+			s_u2[tx + 1][ty] = v_g[idx + 1];
+			s_u1lvl[tx + 1][ty] = du_g[idx + 1];
+			s_u2lvl[tx + 1][ty] = dv_g[idx + 1];
+		}
+
+		if (y == 0) {
+			s_u1[tx][0] = s_u1[tx][ty];
+			s_u2[tx][0] = s_u2[tx][ty];
+			s_u1lvl[tx][0] = s_u1lvl[tx][ty];
+			s_u2lvl[tx][0] = s_u2lvl[tx][ty];
+		} else if (threadIdx.y == 0) {
+			s_u1[tx][0] = u_g[idx - pitchf1];
+			s_u2[tx][0] = v_g[idx - pitchf1];
+			s_u1lvl[tx][0] = du_g[idx - pitchf1];
+			s_u2lvl[tx][0] = dv_g[idx - pitchf1];
+		}
+
+		if (y == ny - 1) {
+			s_u1[tx][ty + 1] = s_u1[tx][ty];
+			s_u2[tx][ty + 1] = s_u2[tx][ty];
+			s_u1lvl[tx][ty + 1] = s_u1lvl[tx][ty];
+			s_u2lvl[tx][ty + 1] = s_u2lvl[tx][ty];
+		} else if (threadIdx.y == blockDim.y - 1) {
+			s_u1[tx][ty + 1] = u_g[idx + pitchf1];
+			s_u2[tx][ty + 1] = v_g[idx + pitchf1];
+			s_u1lvl[tx][ty + 1] = du_g[idx + pitchf1];
+			s_u2lvl[tx][ty + 1] = dv_g[idx + pitchf1];
+		}
+		
 		  __syncthreads();
 		  
 		//Update Robustifications
@@ -258,15 +254,15 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 		// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
 		// represents the tex2D(tex_flow_sor_I1, xx, yy)
 		float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) +
-						tex2D(tex_flow_sor_I1, xx1, yy)- tex2D(tex_flow_sor_I1, xx_1, yy))*hx;
+						tex2D(tex_flow_sor_I1, xx1, yy)- tex2D(tex_flow_sor_I1, xx_1, yy))*hx_1;
 		float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +
-						tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy;
+						tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy_1;
 		float It = tex2D(tex_flow_sor_I2, xx, yy) - tex2D(tex_flow_sor_I1, xx, yy);
 		
-		double dxu = (s_u1[tx1][ty] - s_u1[tx_1][ty] + s_u1lvl[tx1][ty] - s_u1lvl[tx_1][ty])*hx;
-		double dyu = (s_u1[tx][ty1] - s_u1[tx][ty_1] + s_u1lvl[tx][ty1] - s_u1lvl[tx][ty_1])*hy;
-		double dxv = (s_u2[tx1][ty] - s_u2[tx_1][ty] + s_u2lvl[tx1][ty] - s_u2lvl[tx_1][ty])*hx;
-		double dyv = (s_u2[tx][ty1] - s_u2[tx][ty_1] + s_u2lvl[tx][ty1] - s_u2lvl[tx][ty_1])*hy;
+		double dxu = (s_u1[tx1][ty] - s_u1[tx_1][ty] + s_u1lvl[tx1][ty] - s_u1lvl[tx_1][ty])*hx_1;
+		double dyu = (s_u1[tx][ty1] - s_u1[tx][ty_1] + s_u1lvl[tx][ty1] - s_u1lvl[tx][ty_1])*hy_1;
+		double dxv = (s_u2[tx1][ty] - s_u2[tx_1][ty] + s_u2lvl[tx1][ty] - s_u2lvl[tx_1][ty])*hx_1;
+		double dyv = (s_u2[tx][ty1] - s_u2[tx][ty_1] + s_u2lvl[tx][ty1] - s_u2lvl[tx][ty_1])*hy_1;
 	
 		double dataterm = s_u1lvl[tx][ty]*Ix + s_u2lvl[tx][ty]*Iy + It;
 		penaltyd_g[idx] = 1.0f / sqrt(dataterm*dataterm + data_epsilon);
@@ -310,7 +306,129 @@ __global__ void sorflow_update_righthandside_shared
 	int    pitchf1
 )
 {
-	// ### Implement Me###
+	  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	  const float hx_1 = 1.0f / (2.0f*hx);
+	  const float hy_1 = 1.0f / (2.0f*hy);
+	  const float hx_2 = lambda/(hx*hx);
+	  const float hy_2 = lambda/(hy*hy);
+	  
+	  if (x < nx && y < ny) {
+	 		const int tx = threadIdx.x + 1;
+	 		const int ty = threadIdx.y + 1;
+	 		const int idx = y * pitchf1 + x;
+
+	 		__shared__ float s_u1[SF_BW+2][SF_BH+2];
+	 		__shared__ float s_u2[SF_BW+2][SF_BH+2];
+	 		__shared__ float s_penaltyd[SF_BW+2][SF_BH+2];
+	 		__shared__ float s_penaltyr[SF_BW+2][SF_BH+2];
+	 		  
+	 		// load data into shared memory
+	 		s_u1[tx][ty] = u_g[idx];
+	 		s_u2[tx][ty] = v_g[idx];
+	 		s_penaltyd[tx][ty] = penaltyd_g[idx];
+	 		s_penaltyr[tx][ty] = penaltyr_g[idx];
+
+	 		if (x == 0) {
+	 			s_u1[0][ty] = s_u1[tx][ty];
+	 			s_u2[0][ty] = s_u2[tx][ty];
+	 			s_penaltyd[0][ty] = s_penaltyd[tx][ty];
+	 			s_penaltyr[0][ty] = s_penaltyr[tx][ty];
+	 		} else if (threadIdx.x == 0) {
+	 			s_u1[0][ty] = u_g[idx - 1];
+	 			s_u2[0][ty] = v_g[idx - 1];
+	 			s_penaltyd[0][ty] = penaltyd_g[idx - 1];
+	 			s_penaltyr[0][ty] = penaltyr_g[idx - 1];
+	 		}
+
+	 		if (x == nx - 1) {
+	 			s_u1[tx + 1][ty] = s_u1[tx][ty];
+	 			s_u2[tx + 1][ty] = s_u2[tx][ty];
+	 			s_penaltyd[tx + 1][ty] = s_penaltyd[tx][ty];
+	 			s_penaltyr[tx + 1][ty] = s_penaltyr[tx][ty];
+	 		} else if (threadIdx.x == blockDim.x - 1) {
+	 			s_u1[tx + 1][ty] = u_g[idx + 1];
+	 			s_u2[tx + 1][ty] = v_g[idx + 1];
+	 			s_penaltyd[tx + 1][ty] = penaltyd_g[idx + 1];
+	 			s_penaltyr[tx + 1][ty] = penaltyr_g[idx + 1];
+	 		}
+
+	 		if (y == 0) {
+	 			s_u1[tx][0] = s_u1[tx][ty];
+	 			s_u2[tx][0] = s_u2[tx][ty];
+	 			s_penaltyd[tx][0] = s_penaltyd[tx][ty];
+	 			s_penaltyr[tx][0] = s_penaltyr[tx][ty];
+	 		} else if (threadIdx.y == 0) {
+	 			s_u1[tx][0] = u_g[idx - pitchf1];
+	 			s_u2[tx][0] = v_g[idx - pitchf1];
+	 			s_penaltyd[tx][0] = penaltyd_g[idx - pitchf1];
+	 			s_penaltyr[tx][0] = penaltyr_g[idx - pitchf1];
+	 		}
+
+	 		if (y == ny - 1) {
+	 			s_u1[tx][ty + 1] = s_u1[tx][ty];
+	 			s_u2[tx][ty + 1] = s_u2[tx][ty];
+	 			s_penaltyd[tx][ty + 1] = s_penaltyd[tx][ty];
+	 			s_penaltyr[tx][ty + 1] = s_penaltyr[tx][ty];
+	 		} else if (threadIdx.y == blockDim.y - 1) {
+	 			s_u1[tx][ty + 1] = u_g[idx + pitchf1];
+	 			s_u2[tx][ty + 1] = v_g[idx + pitchf1];
+	 			s_penaltyd[tx][ty + 1] = penaltyd_g[idx + pitchf1];
+	 			s_penaltyr[tx][ty + 1] = penaltyr_g[idx + pitchf1];
+	 		}
+	 		
+	 		__syncthreads();
+	 		
+			// TODO: rethink this part again
+			// shared memory indices 
+			unsigned int tx_1 = x == 0 ? tx : tx - 1;
+			unsigned int tx1 = x == nx - 1 ? tx : tx + 1;
+			unsigned int ty_1 = y == 0 ? ty : ty - 1;
+			unsigned int ty1 = y == ny - 1 ? ty : ty + 1;
+			
+			unsigned int x_1 = x == 0 ? x : x - 1;
+			unsigned int x1 = x == nx - 1 ? x : x + 1;
+			unsigned int y_1 = y == 0 ? y : y - 1;
+			unsigned int y1 = y == ny - 1 ? y : y + 1;
+		
+			// global memroy indices. Used to access the texture memory.
+			const float xx   = (float)(x) + SF_TEXTURE_OFFSET;
+			const float yy   = (float)(y) + SF_TEXTURE_OFFSET;
+			const float xx1  = (float)(x1) + SF_TEXTURE_OFFSET;
+			const float xx_1 = (float)(x_1) + SF_TEXTURE_OFFSET;
+			const float yy1  = (float)(y1) + SF_TEXTURE_OFFSET;
+			const float yy_1 = (float)(y_1) + SF_TEXTURE_OFFSET;
+			
+			// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
+			// represents the tex2D(tex_flow_sor_I1, xx, yy)
+			float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) +
+							tex2D(tex_flow_sor_I1, xx1, yy)- tex2D(tex_flow_sor_I1, xx_1, yy))*hx_1;
+			float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +
+							tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy_1;
+			float It = tex2D(tex_flow_sor_I2, xx, yy) - tex2D(tex_flow_sor_I1, xx, yy);
+			
+			float xp = x<nx-1 ? (s_penaltyr[tx1][ty] + s_penaltyr[tx][ty])*0.5f*hx_2 : 0.0f;
+			float xm = x>0    ? (s_penaltyr[tx_1][ty]+ s_penaltyr[tx][ty])*0.5f*hx_2 : 0.0f;
+			float yp = y<ny-1 ? (s_penaltyr[tx][ty1] + s_penaltyr[tx][ty])*0.5f*hy_2 : 0.0f;
+			float ym = y>0    ? (s_penaltyr[tx][ty_1]+ s_penaltyr[tx][ty])*0.5f*hy_2 : 0.0f;
+			float sum = xp + xm + yp + ym;
+			
+			// TODO: rething the indices of this part again
+			bu_g[idx] = -s_penaltyd[tx][ty] * Ix*It
+					+ (x>0    ? xm*s_u1[tx_1][ty] : 0.0f)
+					+ (x<nx-1 ? xp*s_u1[tx1][ty] : 0.0f)
+					+ (y>0    ? ym*s_u1[tx][ty_1] : 0.0f)
+					+ (y<ny-1 ? yp*s_u1[tx][ty1] : 0.0f)
+					- sum * s_u1[tx][ty];
+
+			bv_g[idx] = -s_penaltyd[tx][ty] * Iy*It
+					+ (x>0    ? xm*s_u2[tx_1][ty] : 0.0f)
+					+ (x<nx-1 ? xp*s_u2[tx1][ty] : 0.0f)
+					+ (y>0    ? ym*s_u2[tx][ty_1] : 0.0f)
+					+ (y<ny-1 ? yp*s_u2[tx][ty1] : 0.0f)
+					- sum * s_u2[tx][ty];
+	 		  
+	  }
 }
 
 
