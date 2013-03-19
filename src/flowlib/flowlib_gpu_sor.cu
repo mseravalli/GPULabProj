@@ -156,8 +156,8 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 {
 	  const int x = blockIdx.x * blockDim.x + threadIdx.x;
 	  const int y = blockIdx.y * blockDim.y + threadIdx.y;
-	  const int tx = threadIdx.x+1;
-	  const int ty = threadIdx.y+1;
+	  const int tx = threadIdx.x + 1;
+	  const int ty = threadIdx.y + 1;
 	  const int idx = y*pitchf1 + x;
 
 	  __shared__ float s_u1[SF_BW+2][SF_BH+2];
@@ -228,30 +228,43 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 	  __syncthreads();
 	  
 	//Update Robustifications
-	// for(unsigned int x=0;x<nx_fine;x++){
-	// 	unsigned int x_1 = x==0     ? x : x-1;
-	// 	unsigned int x1 = x==nx_fine-1 ? x : x+1;
-	// 	for(unsigned int y=0;y<ny_fine;y++){
-	// 		unsigned int y_1 = y==0     ? y : y-1;
-	// 		unsigned int y1 = y==ny_fine-1 ? y : y+1;
+	// TODO: rethink this part again
+	// shared memory indices 
+	unsigned int tx_1 = x == 0 ? tx : tx - 1;
+	unsigned int tx1 = x == nx - 1 ? tx : tx + 1;
+	unsigned int ty_1 = y == 0 ? ty : ty - 1;
+	unsigned int ty1 = y == ny - 1 ? ty : ty + 1;
+	
+	unsigned int x_1 = x == 0 ? x : x - 1;
+	unsigned int x1 = x == nx - 1 ? x : x + 1;
+	unsigned int y_1 = y == 0 ? y : y - 1;
+	unsigned int y1 = y == ny - 1 ? y : y + 1;
 
-	// 		float Ix = 0.5f*(_I2warp[y*nx_fine+x1]-_I2warp[y*nx_fine+x_1] +
-	// 				_I1pyramid->level[rec_depth][y*nx_fine+x1]-_I1pyramid->level[rec_depth][y*nx_fine+x_1])*hx_1;
-	// 		float Iy = 0.5f*(_I2warp[y1*nx_fine+x]-_I2warp[y_1*nx_fine+x] +
-	// 				_I1pyramid->level[rec_depth][y1*nx_fine+x]-_I1pyramid->level[rec_depth][y_1*nx_fine+x])*hy_1;
-	// 		float It = _I2warp[y*nx_fine+x] - _I1pyramid->level[rec_depth][y*nx_fine+x];
+	// global memroy indices. Used to access the texture memory.
+	const float xx   = (float)(x) + SF_TEXTURE_OFFSET;
+	const float yy   = (float)(y) + SF_TEXTURE_OFFSET;
+	const float xx1  = (float)(x1) + SF_TEXTURE_OFFSET;
+	const float xx_1 = (float)(x_1) + SF_TEXTURE_OFFSET;
+	const float yy1  = (float)(y1) + SF_TEXTURE_OFFSET;
+	const float yy_1 = (float)(y_1) + SF_TEXTURE_OFFSET;
+	
+	// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
+	// represents the tex2D(tex_flow_sor_I1, xx, yy)
+	float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) +
+					tex2D(tex_flow_sor_I1, xx1, yy)- tex2D(tex_flow_sor_I1, xx_1, yy))*hx;
+	float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +
+					tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy;
+	float It = tex2D(tex_flow_sor_I2, xx, yy) - tex2D(tex_flow_sor_I1, xx, yy);
+	
+	double dxu = (s_u1[tx1][ty] - s_u1[tx_1][ty] + s_u1lvl[tx1][ty] - s_u1lvl[tx_1][ty])*hx;
+	double dyu = (s_u1[tx][ty1] - s_u1[tx][ty_1] + s_u1lvl[tx][ty1] - s_u1lvl[tx][ty_1])*hy;
+	double dxv = (s_u2[tx1][ty] - s_u2[tx_1][ty] + s_u2lvl[tx1][ty] - s_u2lvl[tx_1][ty])*hx;
+	double dyv = (s_u2[tx][ty1] - s_u2[tx][ty_1] + s_u2lvl[tx][ty1] - s_u2lvl[tx][ty_1])*hy;
 
-	// 		double dxu = (_u1[y*nx_fine+x1] - _u1[y*nx_fine+x_1] + _u1lvl[y*nx_fine+x1] - _u1lvl[y*nx_fine+x_1])*hx_1;
-	// 		double dyu = (_u1[y1*nx_fine+x] - _u1[y_1*nx_fine+x] + _u1lvl[y1*nx_fine+x] - _u1lvl[y_1*nx_fine+x])*hy_1;
-	// 		double dxv = (_u2[y*nx_fine+x1] - _u2[y*nx_fine+x_1] + _u2lvl[y*nx_fine+x1] - _u2lvl[y*nx_fine+x_1])*hx_1;
-	// 		double dyv = (_u2[y1*nx_fine+x] - _u2[y_1*nx_fine+x] + _u2lvl[y1*nx_fine+x] - _u2lvl[y_1*nx_fine+x])*hy_1;
-
-	// 		double dataterm = _u1lvl[y*nx_fine+x]*Ix + _u2lvl[y*nx_fine+x]*Iy + It;
-	// 		_penDat[y*nx_fine+x] = 1.0f / sqrt(dataterm*dataterm + _dat_epsilon);
-	// 		_penReg[y*nx_fine+x] = 1.0f / sqrt(dxu*dxu + dxv*dxv + dyu*dyu + dyv*dyv + _reg_epsilon);
-
-	// 	}
-	// }
+	double dataterm = s_u1lvl[tx][ty]*Ix + s_u2lvl[tx][ty]*Iy + It;
+	// TODO: should I use idx or y*nx+x
+	penaltyd_g[y*nx+x] = 1.0f / sqrt(dataterm*dataterm + data_epsilon);
+	penaltyr_g[y*nx+x] = 1.0f / sqrt(dxu*dxu + dxv*dxv + dyu*dyu + dyv*dyv + diff_epsilon);
 }
 
 
