@@ -156,115 +156,117 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 {
 	  const int x = blockIdx.x * blockDim.x + threadIdx.x;
 	  const int y = blockIdx.y * blockDim.y + threadIdx.y;
-	  const int tx = threadIdx.x + 1;
-	  const int ty = threadIdx.y + 1;
-	  const int idx = y*pitchf1 + x;
-
-	  __shared__ float s_u1[SF_BW+2][SF_BH+2];
-	  __shared__ float s_u2[SF_BW+2][SF_BH+2];
-	  __shared__ float s_u1lvl[SF_BW+2][SF_BH+2];
-	  __shared__ float s_u2lvl[SF_BW+2][SF_BH+2];
-	  
-	  // load data into shared memory
 	  if (x < nx && y < ny) {
-	    s_u1[tx][ty] = u_g[idx];
-	    s_u2[tx][ty] = v_g[idx];
-	    s_u1lvl[tx][ty] = du_g[idx];
-	    s_u2lvl[tx][ty] = dv_g[idx];
-	    
-	    if (x == 0) {
-		    s_u1[0][ty] = s_u1[tx][ty];
-		    s_u2[0][ty] = s_u2[tx][ty];
-		    s_u1lvl[0][ty] = s_u1lvl[tx][ty];
-		    s_u2lvl[0][ty] = s_u2lvl[tx][ty];
-	    }
-	    else if (threadIdx.x == 0) {
-		    s_u1[0][ty] = u_g[idx-1];
-		    s_u2[0][ty] = v_g[idx-1];
-		    s_u1lvl[0][ty] = du_g[idx-1];
-		    s_u2lvl[0][ty] = dv_g[idx-1];
-	    }
-	      
-	    if (x == nx-1) {
-		    s_u1[tx+1][ty] = s_u1[tx][ty];
-		    s_u2[tx+1][ty] = s_u2[tx][ty];
-		    s_u1lvl[tx+1][ty] = s_u1lvl[tx][ty];
-		    s_u2lvl[tx+1][ty] = s_u2lvl[tx][ty];
-	    }
-	    else if (threadIdx.x == blockDim.x-1) {
-		    s_u1[tx+1][ty] = u_g[idx+1];
-		    s_u2[tx+1][ty] = v_g[idx+1];
-		    s_u1lvl[tx+1][ty] = du_g[idx+1];
-		    s_u2lvl[tx+1][ty] = dv_g[idx+1];
-	    }
-
-	    if (y == 0) {
-		    s_u1[tx][0] = s_u1[tx][ty];
-		    s_u2[tx][0] = s_u2[tx][ty];
-		    s_u1lvl[tx][0] = s_u1lvl[tx][ty];
-		    s_u2lvl[tx][0] = s_u2lvl[tx][ty];
-	    }
-	    else if (threadIdx.y == 0) {
-		    s_u1[tx][0] = u_g[idx-pitchf1];
-		    s_u2[tx][0] = v_g[idx-pitchf1];
-		    s_u1lvl[tx][0] = du_g[idx-pitchf1];
-		    s_u2lvl[tx][0] = dv_g[idx-pitchf1];
-	    }
-	      
-	    if (y == ny-1) {
-		    s_u1[tx][ty+1] = s_u1[tx][ty];
-		    s_u2[tx][ty+1] = s_u2[tx][ty];
-		    s_u1lvl[tx][ty+1] = s_u1lvl[tx][ty];
-		    s_u2lvl[tx][ty+1] = s_u2lvl[tx][ty];
-	    } 
-	    else if (threadIdx.y == blockDim.y-1) {
-		    s_u1[tx][ty+1] = u_g[idx+pitchf1];
-		    s_u2[tx][ty+1] = v_g[idx+pitchf1];
-		    s_u1lvl[tx][ty+1] = du_g[idx+pitchf1];
-		    s_u2lvl[tx][ty+1] = dv_g[idx+pitchf1];
-	    }
+		  const int tx = threadIdx.x + 1;
+		  const int ty = threadIdx.y + 1;
+		  const int idx = y*pitchf1 + x;
+	
+		  __shared__ float s_u1[SF_BW+2][SF_BH+2];
+		  __shared__ float s_u2[SF_BW+2][SF_BH+2];
+		  __shared__ float s_u1lvl[SF_BW+2][SF_BH+2];
+		  __shared__ float s_u2lvl[SF_BW+2][SF_BH+2];
+		  
+		  // load data into shared memory
+		  if (x < nx && y < ny) {
+			s_u1[tx][ty] = u_g[idx];
+			s_u2[tx][ty] = v_g[idx];
+			s_u1lvl[tx][ty] = du_g[idx];
+			s_u2lvl[tx][ty] = dv_g[idx];
+			
+			if (x == 0) {
+				s_u1[0][ty] = s_u1[tx][ty];
+				s_u2[0][ty] = s_u2[tx][ty];
+				s_u1lvl[0][ty] = s_u1lvl[tx][ty];
+				s_u2lvl[0][ty] = s_u2lvl[tx][ty];
+			}
+			else if (threadIdx.x == 0) {
+				s_u1[0][ty] = u_g[idx-1];
+				s_u2[0][ty] = v_g[idx-1];
+				s_u1lvl[0][ty] = du_g[idx-1];
+				s_u2lvl[0][ty] = dv_g[idx-1];
+			}
+			  
+			if (x == nx-1) {
+				s_u1[tx+1][ty] = s_u1[tx][ty];
+				s_u2[tx+1][ty] = s_u2[tx][ty];
+				s_u1lvl[tx+1][ty] = s_u1lvl[tx][ty];
+				s_u2lvl[tx+1][ty] = s_u2lvl[tx][ty];
+			}
+			else if (threadIdx.x == blockDim.x-1) {
+				s_u1[tx+1][ty] = u_g[idx+1];
+				s_u2[tx+1][ty] = v_g[idx+1];
+				s_u1lvl[tx+1][ty] = du_g[idx+1];
+				s_u2lvl[tx+1][ty] = dv_g[idx+1];
+			}
+	
+			if (y == 0) {
+				s_u1[tx][0] = s_u1[tx][ty];
+				s_u2[tx][0] = s_u2[tx][ty];
+				s_u1lvl[tx][0] = s_u1lvl[tx][ty];
+				s_u2lvl[tx][0] = s_u2lvl[tx][ty];
+			}
+			else if (threadIdx.y == 0) {
+				s_u1[tx][0] = u_g[idx-pitchf1];
+				s_u2[tx][0] = v_g[idx-pitchf1];
+				s_u1lvl[tx][0] = du_g[idx-pitchf1];
+				s_u2lvl[tx][0] = dv_g[idx-pitchf1];
+			}
+			  
+			if (y == ny-1) {
+				s_u1[tx][ty+1] = s_u1[tx][ty];
+				s_u2[tx][ty+1] = s_u2[tx][ty];
+				s_u1lvl[tx][ty+1] = s_u1lvl[tx][ty];
+				s_u2lvl[tx][ty+1] = s_u2lvl[tx][ty];
+			} 
+			else if (threadIdx.y == blockDim.y-1) {
+				s_u1[tx][ty+1] = u_g[idx+pitchf1];
+				s_u2[tx][ty+1] = v_g[idx+pitchf1];
+				s_u1lvl[tx][ty+1] = du_g[idx+pitchf1];
+				s_u2lvl[tx][ty+1] = dv_g[idx+pitchf1];
+			}
+		  }
+	
+		  __syncthreads();
+		  
+		//Update Robustifications
+		// TODO: rethink this part again
+		// shared memory indices 
+		unsigned int tx_1 = x == 0 ? tx : tx - 1;
+		unsigned int tx1 = x == nx - 1 ? tx : tx + 1;
+		unsigned int ty_1 = y == 0 ? ty : ty - 1;
+		unsigned int ty1 = y == ny - 1 ? ty : ty + 1;
+		
+		unsigned int x_1 = x == 0 ? x : x - 1;
+		unsigned int x1 = x == nx - 1 ? x : x + 1;
+		unsigned int y_1 = y == 0 ? y : y - 1;
+		unsigned int y1 = y == ny - 1 ? y : y + 1;
+	
+		// global memroy indices. Used to access the texture memory.
+		const float xx   = (float)(x) + SF_TEXTURE_OFFSET;
+		const float yy   = (float)(y) + SF_TEXTURE_OFFSET;
+		const float xx1  = (float)(x1) + SF_TEXTURE_OFFSET;
+		const float xx_1 = (float)(x_1) + SF_TEXTURE_OFFSET;
+		const float yy1  = (float)(y1) + SF_TEXTURE_OFFSET;
+		const float yy_1 = (float)(y_1) + SF_TEXTURE_OFFSET;
+		
+		// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
+		// represents the tex2D(tex_flow_sor_I1, xx, yy)
+		float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) +
+						tex2D(tex_flow_sor_I1, xx1, yy)- tex2D(tex_flow_sor_I1, xx_1, yy))*hx;
+		float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +
+						tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy;
+		float It = tex2D(tex_flow_sor_I2, xx, yy) - tex2D(tex_flow_sor_I1, xx, yy);
+		
+		double dxu = (s_u1[tx1][ty] - s_u1[tx_1][ty] + s_u1lvl[tx1][ty] - s_u1lvl[tx_1][ty])*hx;
+		double dyu = (s_u1[tx][ty1] - s_u1[tx][ty_1] + s_u1lvl[tx][ty1] - s_u1lvl[tx][ty_1])*hy;
+		double dxv = (s_u2[tx1][ty] - s_u2[tx_1][ty] + s_u2lvl[tx1][ty] - s_u2lvl[tx_1][ty])*hx;
+		double dyv = (s_u2[tx][ty1] - s_u2[tx][ty_1] + s_u2lvl[tx][ty1] - s_u2lvl[tx][ty_1])*hy;
+	
+		double dataterm = s_u1lvl[tx][ty]*Ix + s_u2lvl[tx][ty]*Iy + It;
+		// TODO: should I use idx or y*nx+x
+		penaltyd_g[idx] = 1.0f / sqrt(dataterm*dataterm + data_epsilon);
+		penaltyr_g[idx] = 1.0f / sqrt(dxu*dxu + dxv*dxv + dyu*dyu + dyv*dyv + diff_epsilon);
 	  }
-
-	  __syncthreads();
-	  
-	//Update Robustifications
-	// TODO: rethink this part again
-	// shared memory indices 
-	unsigned int tx_1 = x == 0 ? tx : tx - 1;
-	unsigned int tx1 = x == nx - 1 ? tx : tx + 1;
-	unsigned int ty_1 = y == 0 ? ty : ty - 1;
-	unsigned int ty1 = y == ny - 1 ? ty : ty + 1;
-	
-	unsigned int x_1 = x == 0 ? x : x - 1;
-	unsigned int x1 = x == nx - 1 ? x : x + 1;
-	unsigned int y_1 = y == 0 ? y : y - 1;
-	unsigned int y1 = y == ny - 1 ? y : y + 1;
-
-	// global memroy indices. Used to access the texture memory.
-	const float xx   = (float)(x) + SF_TEXTURE_OFFSET;
-	const float yy   = (float)(y) + SF_TEXTURE_OFFSET;
-	const float xx1  = (float)(x1) + SF_TEXTURE_OFFSET;
-	const float xx_1 = (float)(x_1) + SF_TEXTURE_OFFSET;
-	const float yy1  = (float)(y1) + SF_TEXTURE_OFFSET;
-	const float yy_1 = (float)(y_1) + SF_TEXTURE_OFFSET;
-	
-	// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
-	// represents the tex2D(tex_flow_sor_I1, xx, yy)
-	float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) +
-					tex2D(tex_flow_sor_I1, xx1, yy)- tex2D(tex_flow_sor_I1, xx_1, yy))*hx;
-	float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +
-					tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy;
-	float It = tex2D(tex_flow_sor_I2, xx, yy) - tex2D(tex_flow_sor_I1, xx, yy);
-	
-	double dxu = (s_u1[tx1][ty] - s_u1[tx_1][ty] + s_u1lvl[tx1][ty] - s_u1lvl[tx_1][ty])*hx;
-	double dyu = (s_u1[tx][ty1] - s_u1[tx][ty_1] + s_u1lvl[tx][ty1] - s_u1lvl[tx][ty_1])*hy;
-	double dxv = (s_u2[tx1][ty] - s_u2[tx_1][ty] + s_u2lvl[tx1][ty] - s_u2lvl[tx_1][ty])*hx;
-	double dyv = (s_u2[tx][ty1] - s_u2[tx][ty_1] + s_u2lvl[tx][ty1] - s_u2lvl[tx][ty_1])*hy;
-
-	double dataterm = s_u1lvl[tx][ty]*Ix + s_u2lvl[tx][ty]*Iy + It;
-	// TODO: should I use idx or y*nx+x
-	penaltyd_g[y*nx+x] = 1.0f / sqrt(dataterm*dataterm + data_epsilon);
-	penaltyr_g[y*nx+x] = 1.0f / sqrt(dxu*dxu + dxv*dxv + dyu*dyu + dyv*dyv + diff_epsilon);
 }
 
 
