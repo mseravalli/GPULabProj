@@ -396,14 +396,6 @@ void sorflow_gpu_nonlinear_warp_level
 
 float FlowLibGpuSOR::computeFlow()
 {
-
-
-
-
-
-
-	float lambda = _lambda * 255.0f;
-
 	int   max_rec_depth;
 	int   warp_max_levels;
 	int   rec_depth;
@@ -428,10 +420,9 @@ float FlowLibGpuSOR::computeFlow()
   	_u1[p] = _u2[p] = 0.0f;
   }
 
-  // TODO dummy implementation just as proof of concept
+  // NOTE the initialization should be correct
   bind_textures(_I1, _I2, _nx, _ny, _pitchf1);
   textures_flow_sor_initialized = true;
-
 
 	for(rec_depth = max_rec_depth; rec_depth >= 0; rec_depth--)	{
 
@@ -443,10 +434,12 @@ float FlowLibGpuSOR::computeFlow()
 		hx_fine=(float)_nx/(float)nx_fine;
 		hy_fine=(float)_ny/(float)ny_fine;
 
-		const float hx_1 = 1.0f / (2.0f*hx_fine);
-		const float hy_1 = 1.0f / (2.0f*hy_fine);
-		const float hx_2 = lambda/(hx_fine*hx_fine);
-		const float hy_2 = lambda/(hy_fine*hy_fine);
+    // TODO this should be eliminated: needed only in increase robustness
+//	float lambda = _lambda * 255.0f;
+//	const float hx_1 = 1.0f / (2.0f*hx_fine);
+//	const float hy_1 = 1.0f / (2.0f*hy_fine);
+//	const float hx_2 = lambda/(hx_fine*hx_fine);
+//	const float hy_2 = lambda/(hy_fine*hy_fine);
 
 		if(_debug){
 			sprintf(_debugbuffer,"debug/CI1 %i.png",rec_depth);
@@ -460,9 +453,9 @@ float FlowLibGpuSOR::computeFlow()
 			resampleAreaParallelizableSeparate(_u2,_u2,nx_coarse,ny_coarse,nx_fine,ny_fine,_b2);
 		}
 
-    // TODO dummy implementation just as proof of concept
+    // TODO check if the position of the statement is correct
     // need to swap I2 and I1 ??? 
-    update_textures_flow_sor(_I2, _nx, _ny, _pitchf1);
+    update_textures_flow_sor(_I2, nx_fine, ny_fine, _pitchf1);
 
 		if(rec_depth >= _end_level){
 			backwardRegistrationBilinearFunction(_I2pyramid->level[rec_depth],_I2warp,
@@ -474,6 +467,7 @@ float FlowLibGpuSOR::computeFlow()
 				saveFloatImage(_debugbuffer,_I2warp,nx_fine,ny_fine,1,1.0f,-1.0f);
 			}
 
+      // set all derivatives to 0
 			for(unsigned int p=0;p<nx_fine*ny_fine;p++) { 
         _u1lvl[p] = _u2lvl[p] = 0.0f;
       }
@@ -484,6 +478,7 @@ float FlowLibGpuSOR::computeFlow()
                                          hx_fine, hy_fine, _lambda, _overrelaxation, 
                                          _oi, _ii, _dat_epsilon, _reg_epsilon);
 
+      // apply the update
 			for(unsigned int p=0;p<nx_fine*ny_fine;p++){
 				_u1[p] += _u1lvl[p];
 				_u2[p] += _u2lvl[p];
