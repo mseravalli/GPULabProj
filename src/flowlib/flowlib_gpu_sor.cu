@@ -108,7 +108,13 @@ __global__ void add_flow_fields
 	int    pitchf1
 )
 {
-	// ### Implement Me###
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const int idx = y*pitchf1 + x;
+	if (x < nx && y < ny) {
+		u_g[idx] += du_g[idx];
+		v_g[idx] += dv_g[idx];
+	}
 }
 
 
@@ -263,7 +269,6 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 		double dyv = (s_u2[tx][ty1] - s_u2[tx][ty_1] + s_u2lvl[tx][ty1] - s_u2lvl[tx][ty_1])*hy;
 	
 		double dataterm = s_u1lvl[tx][ty]*Ix + s_u2lvl[tx][ty]*Iy + It;
-		// TODO: should I use idx or y*nx+x
 		penaltyd_g[idx] = 1.0f / sqrt(dataterm*dataterm + data_epsilon);
 		penaltyr_g[idx] = 1.0f / sqrt(dxu*dxu + dxv*dxv + dyu*dyu + dyv*dyv + diff_epsilon);
 	  }
