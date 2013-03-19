@@ -248,12 +248,20 @@ __global__ void sorflow_nonlinear_warp_sor_shared
 	const int y = blockIdx.y * blockDim.y + threadIdx.y;
 
   // element at next position
-  unsigned int x_1 = x==0 ? x : x-1;
-  unsigned int y_1 = y==0 ? y : y-1;
+  const unsigned int x_1 = x==0 ? x : x-1;
+  const unsigned int y_1 = y==0 ? y : y-1;
 
   // element at previous position
-  unsigned int x1 = x==nx-1 ? x : x+1;
-  unsigned int y1 = y==ny-1 ? y : y+1;
+  const unsigned int x1 = x==nx-1 ? x : x+1;
+  const unsigned int y1 = y==ny-1 ? y : y+1;
+
+  // elements for the texture
+	const float xx   = float(x)   + SF_TEXTURE_OFFSET;
+	const float yy   = float(y)   + SF_TEXTURE_OFFSET;
+  const float xx_1 = float(x_1) + SF_TEXTURE_OFFSET;
+  const float yy_1 = float(y_1) + SF_TEXTURE_OFFSET;
+  const float xx1  = float(x1)  + SF_TEXTURE_OFFSET;
+  const float yy1  = float(y1)  + SF_TEXTURE_OFFSET;
 
   unsigned int p = y*nx+x;
 
@@ -266,8 +274,8 @@ __global__ void sorflow_nonlinear_warp_sor_shared
 
   // TODO make it right!! 
   // calculate the gradient average between 2 resolutions
-  float Ix = 0.5f*(tex2D(tex_flow_sor_I2, x1, y) - tex2D(tex_flow_sor_I2, x_1, y) + tex2D(tex_flow_sor_I1, x1, y) - tex2D(tex_flow_sor_I1, x_1, y))*hx_1;
-  float Iy = 0.5f*(tex2D(tex_flow_sor_I2, x, y1) - tex2D(tex_flow_sor_I2, x, y_1) +	tex2D(tex_flow_sor_I1, x, y1) - tex2D(tex_flow_sor_I1, x, y_1))*hy_1;
+  float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) + tex2D(tex_flow_sor_I1, xx1, yy) - tex2D(tex_flow_sor_I1, xx_1, yy))*hx_1;
+  float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +	tex2D(tex_flow_sor_I1, xx, yy1) - tex2D(tex_flow_sor_I1, xx, yy_1))*hy_1;
   
   // p = plus, m = minus
   // average penality of current and previous / current and next
@@ -278,9 +286,58 @@ __global__ void sorflow_nonlinear_warp_sor_shared
   float ym = y>0    ? (penaltyr_g[y_1*nx+x]+penaltyr_g[y*nx+x])*0.5f*hy_2 : 0.0f;
   float sum = xp + xm + yp + ym;
   
-  // TODO load d*_g into shared memory????
+  // load d*_g into shared memory
+//__shared__ float du_s[SF_BW+2][SF_BH+2];
+//__shared__ float dv_s[SF_BW+2][SF_BH+2];
+
+  if (x < nx && y < ny) {
+//  const int tx = threadIdx.x + 1;
+//  const int ty = threadIdx.y + 1;
+//  const int idx = y*pitchf1 + x;
+//
+//  du_s[tx][ty] = du_g[idx];
+//  dv_s[tx][ty] = dv_g[idx];
+//
+//  if (x == 0) {
+//    du_s[0][ty] = du_s[tx][ty];
+//    dv_s[0][ty] = dv_s[tx][ty];
+//    }
+//  else if (threadIdx.x == 0) {
+//    du_s[0][ty] = du_g[idx-1];
+//    dv_s[0][ty] = dv_g[idx-1];
+//  }
+//  if (x == nx-1) {
+//    du_s[tx+1][ty] = du_s[tx][ty];
+//    dv_s[tx+1][ty] = dv_s[tx][ty];
+//  }
+//  else if (threadIdx.x == blockDim.x-1) {
+//    du_s[tx+1][ty] = du_g[idx+1];
+//    dv_s[tx+1][ty] = dv_g[idx+1];
+//  }
+//  if (y == 0) {
+//    du_s[tx][0] = du_s[tx][ty];
+//    dv_s[tx][0] = dv_s[tx][ty];
+//  }
+//  else if (threadIdx.y == 0) {
+//    du_s[tx][0] = du_g[idx-pitchf1];
+//    dv_s[tx][0] = dv_g[idx-pitchf1];
+//  }
+//  if (y == ny-1) {
+//    du_s[tx][ty+1] = du_s[tx][ty];
+//    dv_s[tx][ty+1] = dv_s[tx][ty];
+//  } 
+//  else if (threadIdx.y == blockDim.y-1) {
+//    du_s[tx][ty+1] = du_g[idx+pitchf1];
+//    dv_s[tx][ty+1] = dv_g[idx+pitchf1];
+//  }
+  }
+  else {
+    return;
+  }
+
 
   // TODO eventually put this if at first pos. in order to reduce computations
+  // TODO use the shared memory values ??
   // SOR update adopt Dirichlet boundary conditions
   if((x+y)%2==red){
   	float u1new  = (1.0f-relaxation)*du_g[p] + relaxation *
@@ -370,9 +427,13 @@ void sorflow_gpu_nonlinear_warp_level
   for(int i=0; i<outer_iterations ;i++){
 
     //Update Robustifications
-    // sorflow_update_robustifications_warp_tex_shared
+    sorflow_update_robustifications_warp_tex_shared <<<dimGrid,dimBlock>>>
+      (	u_g,	v_g,	du_g,	dv_g,	penaltyd_g,	penaltyr_g,	nx,	ny,	hx,	hy,	
+        data_epsilon,	diff_epsilon,	pitchf1 );
     //Update Righthand Side
-    // sorflow_update_righthandside_shared
+    sorflow_update_righthandside_shared <<<dimGrid,dimBlock>>>
+      ( u_g, v_g, penaltyd_g, penaltyr_g, bu_g, bv_g, nx, ny, hx, hy, lambda, 
+        pitchf1);
 
     for(int j=0; j<inner_iterations; j++){
       
@@ -396,6 +457,7 @@ void sorflow_gpu_nonlinear_warp_level
 
 float FlowLibGpuSOR::computeFlow()
 {
+	float lambda = _lambda * 255.0f;
 	int   max_rec_depth;
 	int   warp_max_levels;
 	int   rec_depth;
@@ -453,14 +515,13 @@ float FlowLibGpuSOR::computeFlow()
 			resampleAreaParallelizableSeparate(_u2,_u2,nx_coarse,ny_coarse,nx_fine,ny_fine,_b2);
 		}
 
-    // TODO check if the position of the statement is correct
-    // need to swap I2 and I1 ??? 
-    update_textures_flow_sor(_I2, nx_fine, ny_fine, _pitchf1);
-
 		if(rec_depth >= _end_level){
 			backwardRegistrationBilinearFunction(_I2pyramid->level[rec_depth],_I2warp,
 					_u1,_u2,_I1pyramid->level[rec_depth],
 					nx_fine,ny_fine,hx_fine,hy_fine);
+      
+    // NOTE correct position and correct arguments (hopefully)
+    update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _pitchf1);
 
 			if(_debug){
 				sprintf(_debugbuffer,"debug/CW2 %i.png",rec_depth);
@@ -472,17 +533,21 @@ float FlowLibGpuSOR::computeFlow()
         _u1lvl[p] = _u2lvl[p] = 0.0f;
       }
 
-      // TODO check the validity of the passed arguments, hx and hy specifically
+      // TODO check the validity of the passed arguments
       sorflow_gpu_nonlinear_warp_level ( _u1, _u2, _u1lvl, _u2lvl, _b1, _b2, 
-                                         _penDat, _penReg, _nx, _ny, _pitchf1,
-                                         hx_fine, hy_fine, _lambda, _overrelaxation, 
+                                         _penDat, _penReg, nx_fine, ny_fine, _pitchf1,
+                                         hx_fine, hy_fine, lambda, _overrelaxation, 
                                          _oi, _ii, _dat_epsilon, _reg_epsilon);
 
+      // TODO check dimensions: for now it's just copy pasta
+      // grid and block dimensions
+      int ngx = (nx_fine%SF_BW) ? ((nx_fine/SF_BW)+1) : (nx_fine/SF_BW);
+      int ngy = (ny_fine%SF_BH) ? ((ny_fine/SF_BH)+1) : (ny_fine/SF_BH);
+      dim3 dimGrid(ngx,ngy);
+      dim3 dimBlock(SF_BW,SF_BH);
       // apply the update
-			for(unsigned int p=0;p<nx_fine*ny_fine;p++){
-				_u1[p] += _u1lvl[p];
-				_u2[p] += _u2lvl[p];
-			}
+      add_flow_fields <<<dimGrid,dimBlock>>>
+        (_u1lvl, _u2lvl, _u1, _u2, nx_fine, ny_fine, _pitchf1);
 		}
 		else{
 			if(_verbose) fprintf(stderr," skipped");
