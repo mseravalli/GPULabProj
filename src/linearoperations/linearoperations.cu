@@ -91,7 +91,8 @@ void backwardRegistrationBilinearValueTex
 	// ### Implement me ###
 }
 
-void backwardRegistrationBilinearFunctionGlobal
+//NOTE global was added to the function signature
+__global__ void backwardRegistrationBilinearFunctionGlobal
 (
 		const float *in_g,
 		const float *flow1_g,
@@ -106,7 +107,33 @@ void backwardRegistrationBilinearFunctionGlobal
 		float hy
 )
 {
-	// ### Implement me ###
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  
+  // check if x is within the boundaries
+  if (!(x < nx && y < ny)) {
+    return;
+  }
+  
+  const float xx = (float)x+flow1_g[y*pitchf1_in+x]/hx;
+  const float yy = (float)y+flow2_g[y*pitchf1_in+x]/hy;
+  
+  int xxFloor = (int)floor(xx);
+  int yyFloor = (int)floor(yy);
+  
+  int xxCeil = xxFloor == nx-1 ? xxFloor : xxFloor+1;
+  int yyCeil = yyFloor == ny-1 ? yyFloor : yyFloor+1;
+  
+  float xxRest = xx - (float)xxFloor;
+  float yyRest = yy - (float)yyFloor;
+
+  out_g[y*pitchf1_out+x] =
+      (xx < 0.0f || yy < 0.0f || xx > (float)(nx-1) || yy > (float)(ny-1))
+      ? constant_g[y*pitchf1_in+x] :
+    (1.0f-xxRest)*(1.0f-yyRest) * in_g[yyFloor * pitchf1_in + xxFloor]
+        + xxRest*(1.0f-yyRest)  * in_g[yyFloor * pitchf1_in + xxCeil]
+        + (1.0f-xxRest)*yyRest  * in_g[yyCeil  * pitchf1_in + xxFloor]
+        + xxRest * yyRest       * in_g[yyCeil  * pitchf1_in + xxCeil];
 }
 
 void backwardRegistrationBilinearFunctionTex
