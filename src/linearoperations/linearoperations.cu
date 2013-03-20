@@ -212,7 +212,12 @@ __global__ void addKernel
 		int   pitchf1
 )
 {
-	// ### Implement me ###
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const int idx = y*pitchf1 + x;
+	if (x < nx && y < ny) {
+		accumulator_g[idx] += increment_g[idx];
+	}
 }
 
 __global__ void subKernel
@@ -224,7 +229,12 @@ __global__ void subKernel
 		int   pitchf1
 )
 {
-	// ### Implement me ###
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const int idx = y*pitchf1 + x;
+	if (x < nx && y < ny) {
+		accumulator_g[idx] -= increment_g[idx];
+	}
 }
 
 __global__ void setKernel
@@ -236,6 +246,11 @@ __global__ void setKernel
 		float value
 )
 {
-	// ### Implement me ###
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+	const int idx = y*pitchf1 + x;
+	if (x < nx && y < ny) {
+		field_g[idx] = value;
+	}
 }
 

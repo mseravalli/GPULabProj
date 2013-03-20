@@ -20,9 +20,7 @@
 //#include <flowlib_gpu_sor.hpp>
 #include "flowlib.hpp"
 #include <auxiliary/cuda_basic.cuh>
-//#include <linearoperations/linearoperations.cuh>
-//TODO use cuh instead
-#include <linearoperations/linearoperations.h>
+#include <linearoperations/linearoperations.cuh>
 #include <auxiliary/debug.hpp>
 
 cudaChannelFormatDesc flow_sor_float_tex = cudaCreateChannelDesc<float>();
@@ -731,13 +729,6 @@ float FlowLibGpuSOR::computeFlow()
 		hx_fine=(float)_nx/(float)nx_fine;
 		hy_fine=(float)_ny/(float)ny_fine;
 
-    // TODO this should be eliminated: needed only in increase robustness
-//	float lambda = _lambda * 255.0f;
-//	const float hx_1 = 1.0f / (2.0f*hx_fine);
-//	const float hy_1 = 1.0f / (2.0f*hy_fine);
-//	const float hx_2 = lambda/(hx_fine*hx_fine);
-//	const float hy_2 = lambda/(hy_fine*hy_fine);
-
 		if(_debug){
 			sprintf(_debugbuffer,"debug/CI1 %i.png",rec_depth);
 			saveFloatImage(_debugbuffer,_I1pyramid->level[rec_depth],nx_fine,ny_fine,1,1.0f,-1.0f);
@@ -746,27 +737,37 @@ float FlowLibGpuSOR::computeFlow()
 		}
 
 		if(rec_depth < max_rec_depth)	{
-			resampleAreaParallelizableSeparate(_u1,_u1,nx_coarse,ny_coarse,nx_fine,ny_fine,_b1);
-			resampleAreaParallelizableSeparate(_u2,_u2,nx_coarse,ny_coarse,nx_fine,ny_fine,_b2);
+      // TODO replace with the correct function from linearoperations.cu
+//		resampleAreaParallelizableSeparate(_u1,_u1,nx_coarse,ny_coarse,nx_fine,ny_fine,_b1);
+//		resampleAreaParallelizableSeparate(_u2,_u2,nx_coarse,ny_coarse,nx_fine,ny_fine,_b2);
 		}
 
 		if(rec_depth >= _end_level){
-			backwardRegistrationBilinearFunction(_I2pyramid->level[rec_depth],_I2warp,
-					_u1,_u2,_I1pyramid->level[rec_depth],
-					nx_fine,ny_fine,hx_fine,hy_fine);
+      // TODO replace with the correct function from linearoperations.cu
+//		backwardRegistrationBilinearFunction(_I2pyramid->level[rec_depth],_I2warp,
+//				_u1,_u2,_I1pyramid->level[rec_depth],
+//				nx_fine,ny_fine,hx_fine,hy_fine);
       
-    // NOTE correct position and correct arguments (hopefully)
-    update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _pitchf1);
+      // NOTE correct position and correct arguments (hopefully)
+      update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _pitchf1);
 
 			if(_debug){
 				sprintf(_debugbuffer,"debug/CW2 %i.png",rec_depth);
 				saveFloatImage(_debugbuffer,_I2warp,nx_fine,ny_fine,1,1.0f,-1.0f);
 			}
 
+      // grid and block dimensions
+      int ngx = (nx_fine%SF_BW) ? ((nx_fine/SF_BW)+1) : (nx_fine/SF_BW);
+      int ngy = (ny_fine%SF_BH) ? ((ny_fine/SF_BH)+1) : (ny_fine/SF_BH);
+      dim3 dimGrid(ngx,ngy);
+      dim3 dimBlock(SF_BW,SF_BH);
+
+      // TODO be sure to set the variable in the global device memory, not the one on the host
       // set all derivatives to 0
-			for(unsigned int p=0;p<nx_fine*ny_fine;p++) { 
-        _u1lvl[p] = _u2lvl[p] = 0.0f;
-      }
+      setKernel <<<dimGrid,dimBlock>>>
+        (_u1lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
+      setKernel <<<dimGrid,dimBlock>>>
+        (_u2lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
 
       // TODO check the validity of the passed arguments
       sorflow_gpu_nonlinear_warp_level ( _u1, _u2, _u1lvl, _u2lvl, _b1, _b2, 
@@ -774,12 +775,6 @@ float FlowLibGpuSOR::computeFlow()
                                          hx_fine, hy_fine, lambda, _overrelaxation, 
                                          _oi, _ii, _dat_epsilon, _reg_epsilon);
 
-      // TODO check dimensions: for now it's just copy pasta
-      // grid and block dimensions
-      int ngx = (nx_fine%SF_BW) ? ((nx_fine/SF_BW)+1) : (nx_fine/SF_BW);
-      int ngy = (ny_fine%SF_BH) ? ((ny_fine/SF_BH)+1) : (ny_fine/SF_BH);
-      dim3 dimGrid(ngx,ngy);
-      dim3 dimBlock(SF_BW,SF_BH);
       // apply the update
       add_flow_fields <<<dimGrid,dimBlock>>>
         (_u1lvl, _u2lvl, _u1, _u2, nx_fine, ny_fine, _pitchf1);
