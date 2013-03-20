@@ -71,9 +71,9 @@ __device__ float atomicAdd(float* address, double val)
 #endif
 
 
-
-
-void backwardRegistrationBilinearValueTex
+//NOTE global was added to the function signature
+//TODO add texture!!
+__global__ void backwardRegistrationBilinearValueTex
 (
 		const float *in_g,
 		const float *flow1_g,
@@ -88,7 +88,42 @@ void backwardRegistrationBilinearValueTex
 		float hy
 )
 {
-	// ### Implement me ###
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  
+  // check if x is within the boundaries
+  if (!(x < nx && y < ny)) {
+    return;
+  }
+
+	float hx_1 = 1.0f/hx;
+	float hy_1 = 1.0f/hy;
+  float ii_fp = x+(flow1_g[y*pitchf1_in+x]*hx_1);
+  float jj_fp = y+(flow2_g[y*pitchf1_in+x]*hy_1);
+  
+  if((ii_fp < 0.0f) || (jj_fp < 0.0f)
+  			 || (ii_fp > (float)(nx-1)) || (jj_fp > (float)(ny-1))){
+  	out_g[y*pitchf1_out+x] = value;
+  }
+  else if(!isfinite(ii_fp) || !isfinite(jj_fp)){
+  	out_g[y*pitchf1_out+x] = value;
+  }
+  else{
+  	int xx = (int)floor(ii_fp);
+  	int yy = (int)floor(jj_fp);
+  
+  	int xx1 = xx == nx-1 ? xx : xx+1;
+  	int yy1 = yy == ny-1 ? yy : yy+1;
+  
+  	float xx_rest = ii_fp - (float)xx;
+  	float yy_rest = jj_fp - (float)yy;
+  
+  	out_g[y*pitchf1_out+x] = (1.0f-xx_rest)*(1.0f-yy_rest) * in_g[yy   * pitchf1_in + xx]
+  		                     + xx_rest*(1.0f-yy_rest)        * in_g[yy   * pitchf1_in + xx1]
+  		                     + (1.0f-xx_rest)*yy_rest        * in_g[(yy1)* pitchf1_in + xx]
+  		                     + xx_rest * yy_rest             * in_g[(yy1)* pitchf1_in + xx1];
+  }
+
 }
 
 //NOTE global was added to the function signature
@@ -193,9 +228,8 @@ void gaussBlurSeparateMirrorGpu
 
 
 
-
-
-void resampleAreaParallelSeparate
+//NOTE global was added to the function signature
+__global__ void resampleAreaParallelSeparate
 (
 		const float *in_g,
 		float *out_g,
@@ -209,7 +243,66 @@ void resampleAreaParallelSeparate
 		float scalefactor
 )
 {
-	// ### Implement me ###
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  
+  // check if x is within the boundaries
+  if (!(x < nx_in && y < ny_in)) {
+    return;
+  }
+
+  float hx = (float)(nx_in)/(float)(nx_out);
+  float hy = (float)(ny_in)/(float)(ny_out);
+
+  int p = y*pitchf1_out + x;
+
+  // resampling in x
+	float px = (float)x * hx;
+	float left = ceil(px) - px;
+	if(left > hx) left = hx;
+	float midx = hx - left;
+	float right = midx - floorf(midx);
+	midx = midx - right;
+  int nx_orig = pitchf1_in;
+
+	help_g[p] = 0.0f;
+
+	if(left > 0.0f){
+		help_g[p] += in_g[y*nx_orig+(int)(floor(px))]*left*scalefactor;
+		px+= 1.0f;
+	}
+	while(midx > 0.0f){
+		help_g[p] += in_g[y*nx_orig+(int)(floor(px))]*scalefactor;
+		px += 1.0f;
+		midx -= 1.0f;
+	}
+	if(right > RESAMPLE_EPSILON)	{
+		help_g[p] += in_g[y*nx_orig+(int)(floor(px))]*right*scalefactor;
+	}
+
+  // resampling in y
+  float py = (float)y * hy;
+  float top = ceil(py) - py;
+  if(top > hy) top = hy;
+  float midy = hy - top;
+  float bottom = midy - floorf(midy);
+  midy = midy - bottom;
+  
+  out_g[p] = 0.0f;
+  
+  if(top > 0.0f){
+  	out_g[p] += help_g[(int)(floor(py))*pitchf1_out+x]*top*scalefactor;
+  	py += 1.0f;
+  }
+  while(midy > 0.0f){
+  	out_g[p] += help_g[(int)(floor(py))*pitchf1_out+x]*scalefactor;
+  	py += 1.0f;
+  	midy -= 1.0f;
+  }
+  if(bottom > RESAMPLE_EPSILON){
+  	out_g[p] += help_g[(int)(floor(py))*pitchf1_out+x]*bottom*scalefactor;
+  }
+
 }
 
 void resampleAreaParallelSeparateAdjoined
