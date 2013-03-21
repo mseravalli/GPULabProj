@@ -720,6 +720,7 @@ void sorflow_gpu_nonlinear_warp_level
 
 float FlowLibGpuSOR::computeFlow()
 {
+  _verbose = true;
 	float lambda = _lambda * 255.0f;
 	int   max_rec_depth;
 	int   warp_max_levels;
@@ -734,7 +735,7 @@ float FlowLibGpuSOR::computeFlow()
   	max_rec_depth = _I1pyramid->nl-1;
   }
 
-	if(_verbose) fprintf(stderr,"\nFlow GPU SOR Relaxation: %f",_overrelaxation);
+	if(_verbose) fprintf(stderr,"\nFlow GPU SOR Relaxation: %f\n",_overrelaxation);
 
   unsigned int nx_fine, ny_fine, nx_coarse=0, ny_coarse=0;
 
@@ -745,13 +746,34 @@ float FlowLibGpuSOR::computeFlow()
   	_u1[p] = _u2[p] = 0.0f;
   }
 
-  // NOTE the initialization should be correct
+  if(_verbose) fprintf(stderr,"\tu vectors initialized\n");
+
+  // START TEXTURE BINDING
+  if(_verbose) fprintf(stderr,"\tTexture binding started\n");
+  
+  float* I1_g = 0;
+  float* I2_g = 0;
+  size_t iPitchBytes = 0;
+  
+  cutilSafeCall(cudaMallocPitch((void**) &(I1_g), &iPitchBytes, _nx * sizeof(float), _ny));
+  cutilSafeCall(cudaMemcpy2D(I1_g, iPitchBytes, _I1,
+          _nx * sizeof(float), _nx * sizeof(float), _ny,
+          cudaMemcpyHostToDevice));
+
+  cutilSafeCall(cudaMallocPitch((void**) &(I2_g), &iPitchBytes, _nx * sizeof(float), _ny));
+  cutilSafeCall(cudaMemcpy2D(I2_g, iPitchBytes, _I2,
+          _nx * sizeof(float), _nx * sizeof(float), _ny,
+          cudaMemcpyHostToDevice));
+  
   bind_textures(_I1, _I2, _nx, _ny, _pitchf1);
   textures_flow_sor_initialized = true;
+  
+  if(_verbose) fprintf(stderr,"\tTexture binding complete\n");
+  // END TEXTURE BINDING
 
 	for(rec_depth = max_rec_depth; rec_depth >= 0; rec_depth--)	{
 
-		if(_verbose) fprintf(stderr," Level %i",rec_depth);
+		if(_verbose) fprintf(stderr,"\tLevel %i\n",rec_depth);
 
 		nx_fine = _I1pyramid->nx[rec_depth];
 		ny_fine = _I1pyramid->ny[rec_depth];
@@ -766,17 +788,27 @@ float FlowLibGpuSOR::computeFlow()
 			saveFloatImage(_debugbuffer,_I2pyramid->level[rec_depth],nx_fine,ny_fine,1,1.0f,-1.0f);
 		}
 
+		if(_verbose) fprintf(stderr,"\tResampling started\n");
+
 		if(rec_depth < max_rec_depth)	{
-      // TODO replace with the correct function from linearoperations.cu
-//		resampleAreaParallelizableSeparate(_u1,_u1,nx_coarse,ny_coarse,nx_fine,ny_fine,_b1);
-//		resampleAreaParallelizableSeparate(_u2,_u2,nx_coarse,ny_coarse,nx_fine,ny_fine,_b2);
+      // TODO change the actual parameters!! everything is wrong
+  		resampleAreaParallelSeparate(_u1,_u1,nx_coarse,ny_coarse,_pitchf1,
+                                   nx_fine,ny_fine,_pitchf1,_b1);
+  		resampleAreaParallelSeparate(_u2,_u2,nx_coarse,ny_coarse,_pitchf1,
+                                   nx_fine,ny_fine,_pitchf1,_b2);
 		}
 
+		if(_verbose) fprintf(stderr,"\tResampling complete\n");
+
 		if(rec_depth >= _end_level){
-      // TODO replace with the correct function from linearoperations.cu
+
+		  if(_verbose) fprintf(stderr,"\tBack Reg started\n");
+
 //		backwardRegistrationBilinearFunction(_I2pyramid->level[rec_depth],_I2warp,
 //				_u1,_u2,_I1pyramid->level[rec_depth],
 //				nx_fine,ny_fine,hx_fine,hy_fine);
+
+		  if(_verbose) fprintf(stderr,"\tBack Reg complete\n");
       
       // NOTE correct position and correct arguments (hopefully)
       update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _pitchf1);
@@ -816,10 +848,10 @@ float FlowLibGpuSOR::computeFlow()
 		ny_coarse = ny_fine;
 	}
 
-	if(_debug) delete [] _debugbuffer;
-
   unbind_textures_flow_sor();
   textures_flow_sor_initialized = true;
+
+	if(_debug) delete [] _debugbuffer;
 
 	//TODO: Timer
 	return -1.0f;

@@ -227,9 +227,7 @@ void gaussBlurSeparateMirrorGpu
 }
 
 
-
-//NOTE global was added to the function signature
-__global__ void resampleAreaParallelSeparate
+__global__ void resampleAreaParallelSeparateGpu
 (
 		const float *in_g,
 		float *out_g,
@@ -257,6 +255,8 @@ __global__ void resampleAreaParallelSeparate
   int p = y*pitchf1_out + x;
 
   // resampling in x
+	if(scalefactor == 0.0f) scalefactor = 1.0f/hx;
+
 	float px = (float)x * hx;
 	float left = ceil(px) - px;
 	if(left > hx) left = hx;
@@ -281,6 +281,8 @@ __global__ void resampleAreaParallelSeparate
 	}
 
   // resampling in y
+	if(scalefactor == 0.0f) scalefactor = 1.0f/hy;
+
   float py = (float)y * hy;
   float top = ceil(py) - py;
   if(top > hy) top = hy;
@@ -302,7 +304,33 @@ __global__ void resampleAreaParallelSeparate
   if(bottom > RESAMPLE_EPSILON){
   	out_g[p] += help_g[(int)(floor(py))*pitchf1_out+x]*bottom*scalefactor;
   }
+}
 
+
+void resampleAreaParallelSeparate
+(
+		const float *in_g,
+		float *out_g,
+		int   nx_in,
+		int   ny_in,
+		int   pitchf1_in,
+		int   nx_out,
+		int   ny_out,
+		int   pitchf1_out,
+		float *help_g,
+		float scalefactor = 0.0f
+)
+{
+  // TODO be sure of dimensions
+  int ngx = (nx_out%LO_BW) ? ((nx_out/LO_BW)+1) : (nx_out/LO_BW);
+  int ngy = (ny_out%LO_BH) ? ((ny_out/LO_BH)+1) : (ny_out/LO_BH);
+  dim3 dimGrid(ngx,ngy);
+  dim3 dimBlock(LO_BW,LO_BH);
+
+  resampleAreaParallelSeparateGpu <<< dimGrid,dimBlock >>>
+    (in_g,out_g,nx_in,ny_in,pitchf1_in,nx_out,ny_out,pitchf1_out,
+     help_g,scalefactor);
+  
 }
 
 void resampleAreaParallelSeparateAdjoined
