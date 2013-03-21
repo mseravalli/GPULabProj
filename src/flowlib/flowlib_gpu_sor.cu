@@ -756,16 +756,9 @@ float FlowLibGpuSOR::computeFlow()
   size_t iPitchBytes = 0;
   
   cutilSafeCall(cudaMallocPitch((void**) &(I1_g), &iPitchBytes, _nx * sizeof(float), _ny));
-  cutilSafeCall(cudaMemcpy2D(I1_g, iPitchBytes, _I1,
-          _nx * sizeof(float), _nx * sizeof(float), _ny,
-          cudaMemcpyHostToDevice));
-
   cutilSafeCall(cudaMallocPitch((void**) &(I2_g), &iPitchBytes, _nx * sizeof(float), _ny));
-  cutilSafeCall(cudaMemcpy2D(I2_g, iPitchBytes, _I2,
-          _nx * sizeof(float), _nx * sizeof(float), _ny,
-          cudaMemcpyHostToDevice));
   
-  bind_textures(_I1, _I2, _nx, _ny, _pitchf1);
+  bind_textures(I1_g, I2_g, _nx, _ny, _pitchf1);
   textures_flow_sor_initialized = true;
   
   if(_verbose) fprintf(stderr,"\tTexture binding complete\n");
