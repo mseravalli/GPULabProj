@@ -174,7 +174,7 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 		__shared__ float s_u1lvl[SF_BW+2][SF_BH+2];
 		__shared__ float s_u2lvl[SF_BW+2][SF_BH+2];
 		  
-		  // load data into shared memory
+    // load data into shared memory
 		s_u1[tx][ty] = u_g[idx];
 		s_u2[tx][ty] = v_g[idx];
 		s_u1lvl[tx][ty] = du_g[idx];
@@ -244,11 +244,11 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 		unsigned int y1 = y == ny - 1 ? y : y + 1;
 	
 		// global memroy indices. Used to access the texture memory.
-		const float xx   = (float)(x) + SF_TEXTURE_OFFSET;
-		const float yy   = (float)(y) + SF_TEXTURE_OFFSET;
-		const float xx1  = (float)(x1) + SF_TEXTURE_OFFSET;
+		const float xx   = (float)(x)   + SF_TEXTURE_OFFSET;
+		const float yy   = (float)(y)   + SF_TEXTURE_OFFSET;
+		const float xx1  = (float)(x1)  + SF_TEXTURE_OFFSET;
 		const float xx_1 = (float)(x_1) + SF_TEXTURE_OFFSET;
-		const float yy1  = (float)(y1) + SF_TEXTURE_OFFSET;
+		const float yy1  = (float)(y1)  + SF_TEXTURE_OFFSET;
 		const float yy_1 = (float)(y_1) + SF_TEXTURE_OFFSET;
 		
 		// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
@@ -445,11 +445,11 @@ __global__ void sorflow_update_righthandside_shared
 			unsigned int y1 = y == ny - 1 ? y : y + 1;
 		
 			// global memroy indices. Used to access the texture memory.
-			const float xx   = (float)(x) + SF_TEXTURE_OFFSET;
-			const float yy   = (float)(y) + SF_TEXTURE_OFFSET;
-			const float xx1  = (float)(x1) + SF_TEXTURE_OFFSET;
+			const float xx   = (float)(x)   + SF_TEXTURE_OFFSET;
+			const float yy   = (float)(y)   + SF_TEXTURE_OFFSET;
+			const float xx1  = (float)(x1)  + SF_TEXTURE_OFFSET;
 			const float xx_1 = (float)(x_1) + SF_TEXTURE_OFFSET;
-			const float yy1  = (float)(y1) + SF_TEXTURE_OFFSET;
+			const float yy1  = (float)(y1)  + SF_TEXTURE_OFFSET;
 			const float yy_1 = (float)(y_1) + SF_TEXTURE_OFFSET;
 			
 			// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
@@ -460,25 +460,25 @@ __global__ void sorflow_update_righthandside_shared
 							tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy_1;
 			float It = tex2D(tex_flow_sor_I2, xx, yy) - tex2D(tex_flow_sor_I1, xx, yy);
 			
-			float xp = x<nx-1 ? (s_penaltyr[tx1][ty] + s_penaltyr[tx][ty])*0.5f*hx_2 : 0.0f;
-			float xm = x>0    ? (s_penaltyr[tx_1][ty]+ s_penaltyr[tx][ty])*0.5f*hx_2 : 0.0f;
-			float yp = y<ny-1 ? (s_penaltyr[tx][ty1] + s_penaltyr[tx][ty])*0.5f*hy_2 : 0.0f;
-			float ym = y>0    ? (s_penaltyr[tx][ty_1]+ s_penaltyr[tx][ty])*0.5f*hy_2 : 0.0f;
+			float xp = x<nx-1 ? (s_penaltyr[tx1][ty]  + s_penaltyr[tx][ty])*0.5f*hx_2 : 0.0f;
+			float xm = x>0    ? (s_penaltyr[tx_1][ty] + s_penaltyr[tx][ty])*0.5f*hx_2 : 0.0f;
+			float yp = y<ny-1 ? (s_penaltyr[tx][ty1]  + s_penaltyr[tx][ty])*0.5f*hy_2 : 0.0f;
+			float ym = y>0    ? (s_penaltyr[tx][ty_1] + s_penaltyr[tx][ty])*0.5f*hy_2 : 0.0f;
 			float sum = xp + xm + yp + ym;
 			
 			// TODO: rethink the indices of this part again
 			bu_g[idx] = -s_penaltyd[tx][ty] * Ix*It
 					+ (x>0    ? xm*s_u1[tx_1][ty] : 0.0f)
-					+ (x<nx-1 ? xp*s_u1[tx1][ty] : 0.0f)
+					+ (x<nx-1 ? xp*s_u1[tx1][ty]  : 0.0f)
 					+ (y>0    ? ym*s_u1[tx][ty_1] : 0.0f)
-					+ (y<ny-1 ? yp*s_u1[tx][ty1] : 0.0f)
+					+ (y<ny-1 ? yp*s_u1[tx][ty1]  : 0.0f)
 					- sum * s_u1[tx][ty];
 
 			bv_g[idx] = -s_penaltyd[tx][ty] * Iy*It
 					+ (x>0    ? xm*s_u2[tx_1][ty] : 0.0f)
-					+ (x<nx-1 ? xp*s_u2[tx1][ty] : 0.0f)
+					+ (x<nx-1 ? xp*s_u2[tx1][ty]  : 0.0f)
 					+ (y>0    ? ym*s_u2[tx][ty_1] : 0.0f)
-					+ (y<ny-1 ? yp*s_u2[tx][ty1] : 0.0f)
+					+ (y<ny-1 ? yp*s_u2[tx][ty1]  : 0.0f)
 					- sum * s_u2[tx][ty];
 	 		  
 	  }
@@ -816,7 +816,6 @@ float FlowLibGpuSOR::computeFlow() {
 		hx_fine = (float) _nx / (float) nx_fine;
 		hy_fine = (float) _ny / (float) ny_fine;
 
-    // START TEXTURE BINDING
     if (_verbose) fprintf(stderr, "\tTexture binding started\n");
 
     bind_textures(_I1pyramid->level[rec_depth], _I2pyramid->level[rec_depth], 
@@ -824,7 +823,6 @@ float FlowLibGpuSOR::computeFlow() {
     textures_flow_sor_initialized = true;
 
     if (_verbose) fprintf(stderr, "\tTexture binding complete\n");
-    // END TEXTURE BINDING
 
 		if (_debug) {
 			sprintf(_debugbuffer, "debug/CI1 %i.png", rec_depth);
@@ -870,10 +868,8 @@ float FlowLibGpuSOR::computeFlow() {
     if (rec_depth >= _end_level) {
 
       // grid and block dimensions
-      int ngx = (nx_fine % SF_BW) ? ((nx_fine / SF_BW) + 1) : (nx_fine
-          / SF_BW);
-      int ngy = (ny_fine % SF_BH) ? ((ny_fine / SF_BH) + 1) : (ny_fine
-          / SF_BH);
+      int ngx = (nx_fine % SF_BW) ? ((nx_fine / SF_BW) + 1) : (nx_fine / SF_BW);
+      int ngy = (ny_fine % SF_BH) ? ((ny_fine / SF_BH) + 1) : (ny_fine / SF_BH);
       dim3 dimGrid(ngx, ngy);
       dim3 dimBlock(SF_BW, SF_BH);
 
@@ -896,7 +892,6 @@ float FlowLibGpuSOR::computeFlow() {
       
       if (_verbose)	fprintf(stderr, "\tBack Reg complete\n");
 
-      // NOTE correct position and correct arguments (hopefully)
       update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
 
       if (_debug) {
@@ -927,7 +922,6 @@ float FlowLibGpuSOR::computeFlow() {
 
   unbind_textures_flow_sor();
   textures_flow_sor_initialized = false;
-
 }
 
 if(_debug) delete [] _debugbuffer;
