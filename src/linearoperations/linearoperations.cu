@@ -20,6 +20,8 @@
 
 #include <auxiliary/cuda_basic.cuh>
 
+#include <math.h>
+
 cudaChannelFormatDesc linearoperation_float_tex = cudaCreateChannelDesc<float>();
 texture<float, 2, cudaReadModeElementType> tex_linearoperation;
 bool linearoperation_textures_initialized = false;
@@ -264,86 +266,108 @@ void gaussBlurSeparateMirrorGpu
 	// ### Implement me ###
 }
 
-
-__global__ void resampleAreaParallelSeparateGpu
+__global__ void resampleAreaParallelSeparateGpu_x
 (
 		const float *in_g,
 		float *out_g,
-		int   nx_in,
-		int   ny_in,
+		int   nx,
+		int   ny,
+		float hx,
 		int   pitchf1_in,
-		int   nx_out,
-		int   ny_out,
 		int   pitchf1_out,
-		float *help_g,
-		float scalefactor
-)
-{
+		float scalefactor = 0.0f
+) {
 	const int x = blockIdx.x * blockDim.x + threadIdx.x;
 	const int y = blockIdx.y * blockDim.y + threadIdx.y;
-  
-  // check if x is within the boundaries
-  if (!(x < nx_in && y < ny_in)) {
-    return;
-  }
 
-  float hx = (float)(nx_in)/(float)(nx_out);
-  float hy = (float)(ny_in)/(float)(ny_out);
+	// check if x is within the boundaries
+	if (!(x < nx && y < ny)) {
+		return;
+	}
 
-  int p = y*pitchf1_out + x;
 
-  // resampling in x
-	if(scalefactor == 0.0f) scalefactor = 1.0f/hx;
 
-	float px = (float)x * hx;
+	int p = y * pitchf1_out + x;
+	// resampling in x
+	if (scalefactor == 0.0f)
+		scalefactor = 1.0f / hx;
+
+	float px = (float) x * hx;
 	float left = ceil(px) - px;
-	if(left > hx) left = hx;
+	if (left > hx)
+		left = hx;
 	float midx = hx - left;
 	float right = midx - floorf(midx);
 	midx = midx - right;
-  int nx_orig = pitchf1_in;
 
-	help_g[p] = 0.0f;
+	out_g[p] = 0.0f;
 
-	if(left > 0.0f){
-		help_g[p] += in_g[y*nx_orig+(int)(floor(px))]*left*scalefactor;
-		px+= 1.0f;
+	if (left > 0.0f) {
+		out_g[p] += in_g[y * pitchf1_in + (int) (floor(px))] * left * scalefactor;
+		px += 1.0f;
 	}
-	while(midx > 0.0f){
-		help_g[p] += in_g[y*nx_orig+(int)(floor(px))]*scalefactor;
+	while (midx > 0.0f) {
+		out_g[p] += in_g[y * pitchf1_in + (int) (floor(px))] * scalefactor;
 		px += 1.0f;
 		midx -= 1.0f;
 	}
-	if(right > RESAMPLE_EPSILON)	{
-		help_g[p] += in_g[y*nx_orig+(int)(floor(px))]*right*scalefactor;
+	if (right > RESAMPLE_EPSILON) {
+		out_g[p] += in_g[y * pitchf1_in + (int) (floor(px))] * right
+				* scalefactor;
 	}
 
-  // resampling in y
-	if(scalefactor == 0.0f) scalefactor = 1.0f/hy;
-
-  float py = (float)y * hy;
-  float top = ceil(py) - py;
-  if(top > hy) top = hy;
-  float midy = hy - top;
-  float bottom = midy - floorf(midy);
-  midy = midy - bottom;
-  
-  out_g[p] = 0.0f;
-  
-  if(top > 0.0f){
-  	out_g[p] += help_g[(int)(floor(py))*pitchf1_out+x]*top*scalefactor;
-  	py += 1.0f;
-  }
-  while(midy > 0.0f){
-  	out_g[p] += help_g[(int)(floor(py))*pitchf1_out+x]*scalefactor;
-  	py += 1.0f;
-  	midy -= 1.0f;
-  }
-  if(bottom > RESAMPLE_EPSILON){
-  	out_g[p] += help_g[(int)(floor(py))*pitchf1_out+x]*bottom*scalefactor;
-  }
 }
 
+__global__ void resampleAreaParallelSeparateGpu_y
+(
+		const float *in_g,
+		float *out_g,
+		int   nx,
+		int   ny,
+		float hy,
+		int   pitchf1,
+		float scalefactor = 0.0f
+) {
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	// check if x is within the boundaries
+	if (!(x < nx && y < ny)) {
+		return;
+	}
+
+	int p = y * pitchf1 + x;
+
+	// resampling in y
+	if (scalefactor == 0.0f)
+		scalefactor = 1.0f / hy;
+
+	float py = (float) y * hy;
+	float top = ceil(py) - py;
+	if (top > hy)
+		top = hy;
+	float midy = hy - top;
+	float bottom = midy - floorf(midy);
+	midy = midy - bottom;
+
+	out_g[p] = 0.0f;
+
+	if (top > 0.0f) {
+		out_g[p] += in_g[(int) (floor(py)) * pitchf1 + x] * top
+				* scalefactor;
+		py += 1.0f;
+	}
+	while (midy > 0.0f) {
+		out_g[p] += in_g[(int) (floor(py)) * pitchf1 + x] * scalefactor;
+		py += 1.0f;
+		midy -= 1.0f;
+	}
+	if (bottom > RESAMPLE_EPSILON) {
+		out_g[p] += in_g[(int) (floor(py)) * pitchf1 + x] * bottom
+				* scalefactor;
+	}
+	
+}
 
 void resampleAreaParallelSeparate
 (
@@ -356,19 +380,48 @@ void resampleAreaParallelSeparate
 		int   ny_out,
 		int   pitchf1_out,
 		float *help_g,
-		float scalefactor = 0.0f
+		float scalefactor = 1.0f
 )
 {
-  // TODO be sure of dimensions
-  int ngx = (nx_out%LO_BW) ? ((nx_out/LO_BW)+1) : (nx_out/LO_BW);
-  int ngy = (ny_out%LO_BH) ? ((ny_out/LO_BH)+1) : (ny_out/LO_BH);
-  dim3 dimGrid(ngx,ngy);
-  dim3 dimBlock(LO_BW,LO_BH);
+	bool selfalloc = help_g == 0;
+	if (selfalloc) {
+		fprintf(stderr, "\nADVICE: Use a helper array for separate Resampling!");
+		size_t iPitchBytes = 0;
+		cutilSafeCall(
+				cudaMallocPitch((void**) &(help_g), &iPitchBytes,
+						max(nx_in, nx_out) * sizeof(float), max(ny_in, ny_out)));
+		pitchf1_out = iPitchBytes / sizeof(float);
+	}
 
-  resampleAreaParallelSeparateGpu <<< dimGrid,dimBlock >>>
-    (in_g,out_g,nx_in,ny_in,pitchf1_in,nx_out,ny_out,pitchf1_out,
-     help_g,scalefactor);
-  
+	int ngx = (nx_out % LO_BW) ? ((nx_out / LO_BW) + 1) : (nx_out / LO_BW);
+	int ngy = (ny_out % LO_BH) ? ((ny_out / LO_BH) + 1) : (ny_out / LO_BH);
+	dim3 dimGrid(ngx, ngy);
+	dim3 dimBlock(LO_BW, LO_BH);
+	float hx = (float) (nx_in) / (float) (nx_out);
+	float hy = (float) (ny_in) / (float) (ny_out);
+
+  resampleAreaParallelSeparateGpu_x <<< dimGrid,dimBlock >>>
+		  (
+		  		in_g,
+		  		help_g,
+		  		nx_out,
+		  		ny_in,
+		  		hx,
+		  		pitchf1_in,
+		  		pitchf1_out,
+		  		(float)(nx_out)/(float)(nx_in) 
+		  );
+  resampleAreaParallelSeparateGpu_y <<< dimGrid,dimBlock >>>
+		  (
+				help_g,
+		  		out_g,
+		  		nx_out,
+		  		ny_out,
+		  		hy,
+		  		pitchf1_out,
+		  		scalefactor*(float)(ny_out)/(float)(ny_in) 
+		  );
+
 }
 
 void resampleAreaParallelSeparateAdjoined

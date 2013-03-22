@@ -785,7 +785,6 @@ float FlowLibGpuSOR::computeFlow() {
 			fprintf(stderr, "\tResampling started\n");
 
 		if (rec_depth < max_rec_depth) {
-			// TODO change the actual parameters!! everything is wrong
 			resampleAreaParallelSeparate
 			(
 					_u1,
