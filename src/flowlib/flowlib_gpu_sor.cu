@@ -632,11 +632,11 @@ __global__ void sorflow_nonlinear_warp_sor_shared
 		unsigned int y1 = y == ny - 1 ? y : y + 1;
 	
 		// global memroy indices. Used to access the texture memory.
-		const float xx   = (float)(x) + SF_TEXTURE_OFFSET;
-		const float yy   = (float)(y) + SF_TEXTURE_OFFSET;
-		const float xx1  = (float)(x1) + SF_TEXTURE_OFFSET;
+		const float xx   = (float)(x)   + SF_TEXTURE_OFFSET;
+		const float yy   = (float)(y)   + SF_TEXTURE_OFFSET;
+		const float xx1  = (float)(x1)  + SF_TEXTURE_OFFSET;
 		const float xx_1 = (float)(x_1) + SF_TEXTURE_OFFSET;
-		const float yy1  = (float)(y1) + SF_TEXTURE_OFFSET;
+		const float yy1  = (float)(y1)  + SF_TEXTURE_OFFSET;
 		const float yy_1 = (float)(y_1) + SF_TEXTURE_OFFSET;
 		
 		// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
