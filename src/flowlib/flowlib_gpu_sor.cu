@@ -795,11 +795,21 @@ float FlowLibGpuSOR::computeFlow()
 
 		if(rec_depth >= _end_level){
 
+      // grid and block dimensions
+      int ngx = (nx_fine%SF_BW) ? ((nx_fine/SF_BW)+1) : (nx_fine/SF_BW);
+      int ngy = (ny_fine%SF_BH) ? ((ny_fine/SF_BH)+1) : (ny_fine/SF_BH);
+      dim3 dimGrid(ngx,ngy);
+      dim3 dimBlock(SF_BW,SF_BH);
+
 		  if(_verbose) fprintf(stderr,"\tBack Reg started\n");
 
 //		backwardRegistrationBilinearFunction(_I2pyramid->level[rec_depth],_I2warp,
 //				_u1,_u2,_I1pyramid->level[rec_depth],
 //				nx_fine,ny_fine,hx_fine,hy_fine);
+//    backwardRegistrationBilinearFunctionGlobal <<< dimGrid,dimBlock >>>
+//      (_I2pyramid->level[rec_depth],_u1,_u2,_I2warp,
+//       _I1pyramid->level[rec_depth], nx_fine,ny_fine,
+//       pitchf1_in,pitchf1_out,hx_fine,hy_fine);
 
 		  if(_verbose) fprintf(stderr,"\tBack Reg complete\n");
       
@@ -810,12 +820,6 @@ float FlowLibGpuSOR::computeFlow()
 				sprintf(_debugbuffer,"debug/CW2 %i.png",rec_depth);
 				saveFloatImage(_debugbuffer,_I2warp,nx_fine,ny_fine,1,1.0f,-1.0f);
 			}
-
-      // grid and block dimensions
-      int ngx = (nx_fine%SF_BW) ? ((nx_fine/SF_BW)+1) : (nx_fine/SF_BW);
-      int ngy = (ny_fine%SF_BH) ? ((ny_fine/SF_BH)+1) : (ny_fine/SF_BH);
-      dim3 dimGrid(ngx,ngy);
-      dim3 dimBlock(SF_BW,SF_BH);
 
       // TODO be sure to set the variable in the global device memory, not the one on the host
       // set all derivatives to 0
