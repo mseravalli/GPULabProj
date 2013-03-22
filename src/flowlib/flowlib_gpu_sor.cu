@@ -754,18 +754,7 @@ float FlowLibGpuSOR::computeFlow() {
 	if (_verbose)
 		fprintf(stderr, "\tTexture binding started\n");
 
-	float* I1_g = 0;
-	float* I2_g = 0;
-	size_t iPitchBytes = 0;
-
-	cutilSafeCall(
-			cudaMallocPitch((void**) &(I1_g), &iPitchBytes,
-					_nx * sizeof(float), _ny));
-	cutilSafeCall(
-			cudaMallocPitch((void**) &(I2_g), &iPitchBytes,
-					_nx * sizeof(float), _ny));
-
-	bind_textures(I1_g, I2_g, _nx, _ny, _pitchf1);
+	bind_textures(_I1pyramid->level[0], _I2pyramid->level[0], _nx, _ny, _I1pyramid->pitch[0]);
 	textures_flow_sor_initialized = true;
 
 	if (_verbose)
@@ -797,10 +786,30 @@ float FlowLibGpuSOR::computeFlow() {
 
 		if (rec_depth < max_rec_depth) {
 			// TODO change the actual parameters!! everything is wrong
-			resampleAreaParallelSeparate(_u1, _u1, nx_coarse, ny_coarse,
-					_pitchf1, nx_fine, ny_fine, _pitchf1, _b1);
-			resampleAreaParallelSeparate(_u2, _u2, nx_coarse, ny_coarse,
-					_pitchf1, nx_fine, ny_fine, _pitchf1, _b2);
+			resampleAreaParallelSeparate
+			(
+					_u1,
+					_u1,
+					nx_coarse,
+					ny_coarse,
+					_I2pyramid->pitch[rec_depth+1],
+					nx_fine,
+					ny_fine,
+					_I2pyramid->pitch[rec_depth],
+					_b1
+			);
+			resampleAreaParallelSeparate
+			(
+					_u2,
+					_u2,
+					nx_coarse,
+					ny_coarse,
+					_I2pyramid->pitch[rec_depth+1],
+					nx_fine,
+					ny_fine,
+					_I2pyramid->pitch[rec_depth],
+					_b2
+			);
 		}
 
 		if (_verbose)
@@ -833,6 +842,7 @@ float FlowLibGpuSOR::computeFlow() {
 					hx_fine,
 					hy_fine
 			);
+			
 			if (_verbose)
 				fprintf(stderr, "\tBack Reg complete\n");
 
@@ -857,11 +867,12 @@ float FlowLibGpuSOR::computeFlow() {
 					_b2, _penDat, _penReg, nx_fine, ny_fine, _pitchf1, hx_fine,
 					hy_fine, lambda, _overrelaxation, _oi, _ii, _dat_epsilon,
 					_reg_epsilon);
-
+			
 			// apply the update
-add_flow_fields		<<<dimGrid,dimBlock>>>
-		(_u1lvl, _u2lvl, _u1, _u2, nx_fine, ny_fine, _pitchf1);
-	}
+			add_flow_fields <<<dimGrid,dimBlock>>>
+			(_u1lvl, _u2lvl, _u1, _u2, nx_fine, ny_fine, _pitchf1);
+
+		}
 	else {
 		if(_verbose) fprintf(stderr," skipped");
 	}
