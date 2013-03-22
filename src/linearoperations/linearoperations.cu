@@ -227,6 +227,7 @@ void backwardRegistrationBilinearFunctionTex
 )
 {
 	// ### Implement me, if you want ###
+  fprintf(stderr, "\nERROR this function is not yet implemented\n");
 }
 
 
@@ -244,6 +245,7 @@ void forewardRegistrationBilinearAtomic
 )
 {
 	// ### Implement me ###
+  fprintf(stderr, "\nERROR this function is not yet implemented\n");
 }
 
 
@@ -264,6 +266,7 @@ void gaussBlurSeparateMirrorGpu
 )
 {
 	// ### Implement me ###
+  fprintf(stderr, "\nERROR this function is not yet implemented\n");
 }
 
 __global__ void resampleAreaParallelSeparateGpu_x
@@ -437,6 +440,7 @@ void resampleAreaParallelSeparateAdjoined
 )
 {
 	// ### Implement me ###
+  fprintf(stderr, "\nERROR this function is not yet implemented\n");
 }
 
 

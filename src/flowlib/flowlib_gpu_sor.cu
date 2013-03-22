@@ -270,6 +270,59 @@ __global__ void sorflow_update_robustifications_warp_tex_shared
 	  }
 }
 
+__global__ void sorflow_update_robustifications_warp_tex
+(
+	const float *u_g,
+	const float *v_g,
+	const float *du_g,
+	const float *dv_g,
+	float *penaltyd_g,
+	float *penaltyr_g,
+	int    nx,
+	int    ny,
+	float  hx,
+	float  hy,
+	float  data_epsilon,
+	float  diff_epsilon,
+	int    pitchf1
+)
+{
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  if (!(x < nx && y < ny)) {
+    return;
+  }
+
+  unsigned int x_1 = x==0     ? x : x-1;
+  unsigned int x1 = x==nx-1 ? x : x+1;
+  unsigned int y_1 = y==0     ? y : y-1;
+  unsigned int y1 = y==ny-1 ? y : y+1;
+  
+  const float xx   = (float)(x) + SF_TEXTURE_OFFSET;
+  const float yy   = (float)(y) + SF_TEXTURE_OFFSET;
+  const float xx1  = (float)(x1) + SF_TEXTURE_OFFSET;
+  const float xx_1 = (float)(x_1) + SF_TEXTURE_OFFSET;
+  const float yy1  = (float)(y1) + SF_TEXTURE_OFFSET;
+  const float yy_1 = (float)(y_1) + SF_TEXTURE_OFFSET;
+
+	const float hx_1 = 1.0f / (2.0f*hx);
+	const float hy_1 = 1.0f / (2.0f*hy);
+    
+	float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) +
+					tex2D(tex_flow_sor_I1, xx1, yy)- tex2D(tex_flow_sor_I1, xx_1, yy))*hx_1;
+	float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +
+					tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy_1;
+	float It = tex2D(tex_flow_sor_I2, xx, yy) - tex2D(tex_flow_sor_I1, xx, yy);
+
+  double dxu = (u_g[y *pitchf1+x1] - u_g[y * pitchf1+x_1] + du_g[y* pitchf1+x1] - du_g[y * pitchf1+x_1])*hx_1;
+  double dyu = (u_g[y1*pitchf1+x]  - u_g[y_1*pitchf1+x]   + du_g[y1*pitchf1+x]  - du_g[y_1*pitchf1+x]) * hy_1;
+  double dxv = (v_g[y *pitchf1+x1] - v_g[y * pitchf1+x_1] + dv_g[y* pitchf1+x1] - dv_g[y * pitchf1+x_1])*hx_1;
+  double dyv = (v_g[y1*pitchf1+x]  - v_g[y_1*pitchf1+x]   + dv_g[y1*pitchf1+x]  - dv_g[y_1*pitchf1+x]) * hy_1;
+  
+  double dataterm = du_g[y*pitchf1+x]*Ix + dv_g[y*pitchf1+x]*Iy + It;
+  penaltyd_g[y*pitchf1+x] = 1.0f / sqrt(dataterm*dataterm + data_epsilon);
+  penaltyr_g[y*pitchf1+x] = 1.0f / sqrt(dxu*dxu + dxv*dxv + dyu*dyu + dyv*dyv + diff_epsilon);
+}
 
 /**
  * @brief Precomputes one value as the sum of all values not depending of the
@@ -430,7 +483,6 @@ __global__ void sorflow_update_righthandside_shared
 	 		  
 	  }
 }
-
 
 /**
  * @brief Kernel to compute one Red-Black-SOR iteration for the nonlinear
@@ -680,7 +732,6 @@ void sorflow_gpu_nonlinear_warp_level
 {
   bool red = 0;
 
-  // TODO check dimensions: for now it's just copy pasta
   // grid and block dimensions
 	int ngx = (nx%SF_BW) ? ((nx/SF_BW)+1) : (nx/SF_BW);
 	int ngy = (ny%SF_BH) ? ((ny/SF_BH)+1) : (ny/SF_BH);
@@ -697,7 +748,7 @@ void sorflow_gpu_nonlinear_warp_level
     sorflow_update_righthandside_shared <<<dimGrid,dimBlock>>>
       ( u_g, v_g, penaltyd_g, penaltyr_g, bu_g, bv_g, nx, ny, hx, hy, lambda, 
         pitchf1);
-
+  
     for(int j=0; j<inner_iterations; j++){
       
       // TODO check the effective dimension of the blocks
@@ -705,12 +756,12 @@ void sorflow_gpu_nonlinear_warp_level
       sorflow_nonlinear_warp_sor_shared <<<dimGrid,dimBlock>>>
         ( bu_g, bv_g, penaltyd_g, penaltyr_g, du_g, dv_g, nx, ny, hx, hy, 
           lambda, overrelaxation, red, pitchf1 );
-
+  
       red = 1;
       sorflow_nonlinear_warp_sor_shared <<<dimGrid,dimBlock>>>
         ( bu_g, bv_g, penaltyd_g, penaltyr_g, du_g, dv_g, nx, ny, hx, hy, 
           lambda, overrelaxation, red, pitchf1 );
-
+  
     }
 
   }
@@ -753,30 +804,27 @@ float FlowLibGpuSOR::computeFlow() {
   setKernel <<<dimGrid_glob, dimBlock_glob>>> (_u1_g, _nx, _ny, _pitchf1, 0.0f);
   setKernel <<<dimGrid_glob, dimBlock_glob>>> (_u2_g, _nx, _ny, _pitchf1, 0.0f);
 
-	if (_verbose)
-		fprintf(stderr, "\tu vectors initialized\n");
-
-	// START TEXTURE BINDING
-	if (_verbose)
-		fprintf(stderr, "\tTexture binding started\n");
-
-	bind_textures(_I1pyramid->level[0], _I2pyramid->level[0], _nx, _ny, _I1pyramid->pitch[0]);
-	textures_flow_sor_initialized = true;
-
-	if (_verbose)
-		fprintf(stderr, "\tTexture binding complete\n");
-	// END TEXTURE BINDING
+	if (_verbose)	fprintf(stderr, "\tu vectors initialized\n");
 
 	for (rec_depth = max_rec_depth; rec_depth >= 0; rec_depth--) {
 
-		if (_verbose)
-			fprintf(stderr, "\tLevel %i\n", rec_depth);
+		if (_verbose) fprintf(stderr, "\tLevel %i\n", rec_depth);
 
 		nx_fine = _I1pyramid->nx[rec_depth];
 		ny_fine = _I1pyramid->ny[rec_depth];
 
 		hx_fine = (float) _nx / (float) nx_fine;
 		hy_fine = (float) _ny / (float) ny_fine;
+
+    // START TEXTURE BINDING
+    if (_verbose) fprintf(stderr, "\tTexture binding started\n");
+
+    bind_textures(_I1pyramid->level[rec_depth], _I2pyramid->level[rec_depth], 
+      nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
+    textures_flow_sor_initialized = true;
+
+    if (_verbose) fprintf(stderr, "\tTexture binding complete\n");
+    // END TEXTURE BINDING
 
 		if (_debug) {
 			sprintf(_debugbuffer, "debug/CI1 %i.png", rec_depth);
@@ -787,8 +835,7 @@ float FlowLibGpuSOR::computeFlow() {
 					ny_fine, 1, 1.0f, -1.0f);
 		}
 
-		if (_verbose)
-			fprintf(stderr, "\tResampling started\n");
+		if (_verbose) fprintf(stderr, "\tResampling started\n");
 
 		if (rec_depth < max_rec_depth) {
   		resampleAreaParallelSeparate
@@ -820,59 +867,56 @@ float FlowLibGpuSOR::computeFlow() {
 		if (_verbose)
 			fprintf(stderr, "\tResampling complete\n");
 
-	if (rec_depth >= _end_level) {
+    if (rec_depth >= _end_level) {
 
-		// grid and block dimensions
-		int ngx = (nx_fine % SF_BW) ? ((nx_fine / SF_BW) + 1) : (nx_fine
-				/ SF_BW);
-		int ngy = (ny_fine % SF_BH) ? ((ny_fine / SF_BH) + 1) : (ny_fine
-				/ SF_BH);
-		dim3 dimGrid(ngx, ngy);
-		dim3 dimBlock(SF_BW, SF_BH);
+      // grid and block dimensions
+      int ngx = (nx_fine % SF_BW) ? ((nx_fine / SF_BW) + 1) : (nx_fine
+          / SF_BW);
+      int ngy = (ny_fine % SF_BH) ? ((ny_fine / SF_BH) + 1) : (ny_fine
+          / SF_BH);
+      dim3 dimGrid(ngx, ngy);
+      dim3 dimBlock(SF_BW, SF_BH);
 
-		if (_verbose)
-			fprintf(stderr, "\tBack Reg started\n");
-		
-		backwardRegistrationBilinearFunctionGlobal
-		(
-				_I2pyramid->level[rec_depth],
-				_u1_g,
-				_u2_g,
-				_I2warp,
-				_I1pyramid->level[rec_depth],
-				nx_fine,
-				ny_fine,
-				_I2pyramid->pitch[rec_depth],
-				_I1pyramid->pitch[rec_depth],
-				hx_fine,
-				hy_fine
-		);
-		
-		if (_verbose)
-			fprintf(stderr, "\tBack Reg complete\n");
+      if (_verbose) fprintf(stderr, "\tBack Reg started\n");
+      
+      backwardRegistrationBilinearFunctionGlobal
+      (
+          _I2pyramid->level[rec_depth],
+          _u1_g,
+          _u2_g,
+          _I2warp,
+          _I1pyramid->level[rec_depth],
+          nx_fine,
+          ny_fine,
+          _I2pyramid->pitch[rec_depth],
+          _I1pyramid->pitch[rec_depth],
+          hx_fine,
+          hy_fine
+      );
+      
+      if (_verbose)	fprintf(stderr, "\tBack Reg complete\n");
 
-//		// NOTE correct position and correct arguments (hopefully)
-//		update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _pitchf1);
-//
-//		if (_debug) {
-//			sprintf(_debugbuffer, "debug/CW2 %i.png", rec_depth);
-//			saveFloatImage(_debugbuffer, _I2warp, nx_fine, ny_fine, 1,
-//					1.0f, -1.0f);
-//		}
-//
-		// set all derivatives to 0
-		setKernel <<<dimGrid,dimBlock>>>(_u1lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
-		setKernel <<<dimGrid,dimBlock>>>(_u2lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
+      // NOTE correct position and correct arguments (hopefully)
+      update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
 
-//		// TODO check the validity of the passed arguments
-//		sorflow_gpu_nonlinear_warp_level(_u1, _u2, _u1lvl, _u2lvl, _b1,
-//				_b2, _penDat, _penReg, nx_fine, ny_fine, _pitchf1, hx_fine,
-//				hy_fine, lambda, _overrelaxation, _oi, _ii, _dat_epsilon,
-//				_reg_epsilon);
-		
-		// apply the update
-		add_flow_fields <<<dimGrid,dimBlock>>>
-		(_u1lvl, _u2lvl, _u1_g, _u2_g, nx_fine, ny_fine, _pitchf1);
+      if (_debug) {
+        sprintf(_debugbuffer, "debug/CW2 %i.png", rec_depth);
+        saveFloatImage(_debugbuffer, _I2warp, nx_fine, ny_fine, 1,
+            1.0f, -1.0f);
+      }
+
+      // set all derivatives to 0
+      setKernel <<<dimGrid,dimBlock>>>(_u1lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
+      setKernel <<<dimGrid,dimBlock>>>(_u2lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
+
+      sorflow_gpu_nonlinear_warp_level(_u1_g, _u2_g, _u1lvl, _u2lvl, _b1,
+          _b2, _penDat, _penReg, nx_fine, ny_fine, _pitchf1, hx_fine,
+          hy_fine, lambda, _overrelaxation, _oi, _ii, _dat_epsilon,
+          _reg_epsilon);
+      
+      // apply the update
+      add_flow_fields <<<dimGrid,dimBlock>>>
+        (_u1lvl, _u2lvl, _u1_g, _u2_g, nx_fine, ny_fine, _pitchf1);
 
 	}
 	else {
@@ -880,10 +924,11 @@ float FlowLibGpuSOR::computeFlow() {
 	}
 	nx_coarse = nx_fine;
 	ny_coarse = ny_fine;
-}
 
-unbind_textures_flow_sor();
-textures_flow_sor_initialized = true;
+  unbind_textures_flow_sor();
+  textures_flow_sor_initialized = false;
+
+}
 
 if(_debug) delete [] _debugbuffer;
 
