@@ -725,6 +725,12 @@ float FlowLibGpuSOR::computeFlow() {
 	int warp_max_levels;
 	int rec_depth;
 
+  // grid and block dimensions
+  int ngx_glob = (_nx % SF_BW) ? ((_nx / SF_BW) + 1) : (_nx / SF_BW);
+  int ngy_glob = (_ny % SF_BH) ? ((_ny / SF_BH) + 1) : (_ny / SF_BH);
+  dim3 dimGrid_glob(ngx_glob, ngy_glob);
+  dim3 dimBlock_glob(SF_BW, SF_BH);
+
 	warp_max_levels = computeMaxWarpLevels();
 
 	max_rec_depth
@@ -743,9 +749,9 @@ float FlowLibGpuSOR::computeFlow() {
 	float hx_fine;
 	float hy_fine;
 
-	for (unsigned int p = 0; p < _nx * _ny; p++) {
-		_u1[p] = _u2[p] = 0.0f;
-	}
+  // set the initial u to 0
+  setKernel <<<dimGrid_glob, dimBlock_glob>>> (_u1_g, _nx, _ny, _pitchf1, 0.0f);
+  setKernel <<<dimGrid_glob, dimBlock_glob>>> (_u2_g, _nx, _ny, _pitchf1, 0.0f);
 
 	if (_verbose)
 		fprintf(stderr, "\tu vectors initialized\n");
@@ -785,93 +791,90 @@ float FlowLibGpuSOR::computeFlow() {
 			fprintf(stderr, "\tResampling started\n");
 
 		if (rec_depth < max_rec_depth) {
-			resampleAreaParallelSeparate
-			(
-					_u1,
-					_u1,
-					nx_coarse,
-					ny_coarse,
-					_I2pyramid->pitch[rec_depth+1],
-					nx_fine,
-					ny_fine,
-					_I2pyramid->pitch[rec_depth],
-					_b1
-			);
-			resampleAreaParallelSeparate
-			(
-					_u2,
-					_u2,
-					nx_coarse,
-					ny_coarse,
-					_I2pyramid->pitch[rec_depth+1],
-					nx_fine,
-					ny_fine,
-					_I2pyramid->pitch[rec_depth],
-					_b2
-			);
+  		resampleAreaParallelSeparate
+  		(
+  				_u1_g,
+  				_u1_g,
+  				nx_coarse,
+  				ny_coarse,
+  				_I2pyramid->pitch[rec_depth+1],
+  				nx_fine,
+  				ny_fine,
+  				_I2pyramid->pitch[rec_depth],
+  				_b1
+  		);
+  		resampleAreaParallelSeparate
+  		(
+  				_u2_g,
+  				_u2_g,
+  				nx_coarse,
+  				ny_coarse,
+  				_I2pyramid->pitch[rec_depth+1],
+  				nx_fine,
+  				ny_fine,
+  				_I2pyramid->pitch[rec_depth],
+  				_b2
+  		);
 		}
 
 		if (_verbose)
 			fprintf(stderr, "\tResampling complete\n");
 
-		if (rec_depth >= _end_level) {
+	if (rec_depth >= _end_level) {
 
-			// grid and block dimensions
-			int ngx = (nx_fine % SF_BW) ? ((nx_fine / SF_BW) + 1) : (nx_fine
-					/ SF_BW);
-			int ngy = (ny_fine % SF_BH) ? ((ny_fine / SF_BH) + 1) : (ny_fine
-					/ SF_BH);
-			dim3 dimGrid(ngx, ngy);
-			dim3 dimBlock(SF_BW, SF_BH);
+		// grid and block dimensions
+		int ngx = (nx_fine % SF_BW) ? ((nx_fine / SF_BW) + 1) : (nx_fine
+				/ SF_BW);
+		int ngy = (ny_fine % SF_BH) ? ((ny_fine / SF_BH) + 1) : (ny_fine
+				/ SF_BH);
+		dim3 dimGrid(ngx, ngy);
+		dim3 dimBlock(SF_BW, SF_BH);
 
-			if (_verbose)
-				fprintf(stderr, "\tBack Reg started\n");
-			
-			backwardRegistrationBilinearFunctionGlobal
-			(
-					_I2pyramid->level[rec_depth],
-					_u1,
-					_u2,
-					_I2warp,
-					_I1pyramid->level[rec_depth],
-					nx_fine,
-					ny_fine,
-					_I2pyramid->pitch[rec_depth],
-					_I1pyramid->pitch[rec_depth],
-					hx_fine,
-					hy_fine
-			);
-			
-			if (_verbose)
-				fprintf(stderr, "\tBack Reg complete\n");
+		if (_verbose)
+			fprintf(stderr, "\tBack Reg started\n");
+		
+		backwardRegistrationBilinearFunctionGlobal
+		(
+				_I2pyramid->level[rec_depth],
+				_u1_g,
+				_u2_g,
+				_I2warp,
+				_I1pyramid->level[rec_depth],
+				nx_fine,
+				ny_fine,
+				_I2pyramid->pitch[rec_depth],
+				_I1pyramid->pitch[rec_depth],
+				hx_fine,
+				hy_fine
+		);
+		
+		if (_verbose)
+			fprintf(stderr, "\tBack Reg complete\n");
 
-			// NOTE correct position and correct arguments (hopefully)
-			update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _pitchf1);
+//		// NOTE correct position and correct arguments (hopefully)
+//		update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _pitchf1);
+//
+//		if (_debug) {
+//			sprintf(_debugbuffer, "debug/CW2 %i.png", rec_depth);
+//			saveFloatImage(_debugbuffer, _I2warp, nx_fine, ny_fine, 1,
+//					1.0f, -1.0f);
+//		}
+//
+		// set all derivatives to 0
+		setKernel <<<dimGrid,dimBlock>>>(_u1lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
+		setKernel <<<dimGrid,dimBlock>>>(_u2lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
 
-			if (_debug) {
-				sprintf(_debugbuffer, "debug/CW2 %i.png", rec_depth);
-				saveFloatImage(_debugbuffer, _I2warp, nx_fine, ny_fine, 1,
-						1.0f, -1.0f);
-			}
+//		// TODO check the validity of the passed arguments
+//		sorflow_gpu_nonlinear_warp_level(_u1, _u2, _u1lvl, _u2lvl, _b1,
+//				_b2, _penDat, _penReg, nx_fine, ny_fine, _pitchf1, hx_fine,
+//				hy_fine, lambda, _overrelaxation, _oi, _ii, _dat_epsilon,
+//				_reg_epsilon);
+		
+		// apply the update
+		add_flow_fields <<<dimGrid,dimBlock>>>
+		(_u1lvl, _u2lvl, _u1_g, _u2_g, nx_fine, ny_fine, _pitchf1);
 
-			// TODO be sure to set the variable in the global device memory, not the one on the host
-			// set all derivatives to 0
-			setKernel <<<dimGrid,dimBlock>>>
-			(_u1lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
-			setKernel <<<dimGrid,dimBlock>>>
-			(_u2lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
-
-			// TODO check the validity of the passed arguments
-			sorflow_gpu_nonlinear_warp_level(_u1, _u2, _u1lvl, _u2lvl, _b1,
-					_b2, _penDat, _penReg, nx_fine, ny_fine, _pitchf1, hx_fine,
-					hy_fine, lambda, _overrelaxation, _oi, _ii, _dat_epsilon,
-					_reg_epsilon);
-			
-			// apply the update
-			add_flow_fields <<<dimGrid,dimBlock>>>
-			(_u1lvl, _u2lvl, _u1, _u2, nx_fine, ny_fine, _pitchf1);
-
-		}
+	}
 	else {
 		if(_verbose) fprintf(stderr," skipped");
 	}

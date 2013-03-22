@@ -285,8 +285,6 @@ __global__ void resampleAreaParallelSeparateGpu_x
 		return;
 	}
 
-
-
 	int p = y * pitchf1_out + x;
 	// resampling in x
 	if (scalefactor == 0.0f)
