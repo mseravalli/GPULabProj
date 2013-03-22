@@ -126,8 +126,52 @@ __global__ void backwardRegistrationBilinearValueTex
 
 }
 
-//NOTE global was added to the function signature
-__global__ void backwardRegistrationBilinearFunctionGlobal
+__global__ void backwardRegistrationBilinearFunctionGlobalGpu
+(
+		const float *in_g,
+		const float *flow1_g,
+		const float *flow2_g,
+		float *out_g,
+		const float *constant_g,
+		int   nx,
+		int   ny,
+		int   pitchf1_in,
+		int   pitchf1_out,
+		float hx,
+		float hy
+) {
+	const int x = blockIdx.x * blockDim.x + threadIdx.x;
+	const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+	// check if x is within the boundaries
+	if (!(x < nx && y < ny)) {
+		return;
+	}
+
+	const float xx = (float) x + flow1_g[y * pitchf1_in + x] / hx;
+	const float yy = (float) y + flow2_g[y * pitchf1_in + x] / hy;
+
+	int xxFloor = (int) floor(xx);
+	int yyFloor = (int) floor(yy);
+
+	int xxCeil = xxFloor == nx - 1 ? xxFloor : xxFloor + 1;
+	int yyCeil = yyFloor == ny - 1 ? yyFloor : yyFloor + 1;
+
+	float xxRest = xx - (float) xxFloor;
+	float yyRest = yy - (float) yyFloor;
+
+	out_g[y * pitchf1_out + x] = (xx < 0.0f || yy < 0.0f || xx > (float) (nx
+			- 1) || yy > (float) (ny - 1)) ? constant_g[y * pitchf1_in + x]
+			: (1.0f - xxRest) * (1.0f - yyRest) * in_g[yyFloor * pitchf1_in
+					+ xxFloor] + xxRest * (1.0f - yyRest) * in_g[yyFloor
+					* pitchf1_in + xxCeil] + (1.0f - xxRest) * yyRest
+					* in_g[yyCeil * pitchf1_in + xxFloor] + xxRest * yyRest
+					* in_g[yyCeil * pitchf1_in + xxCeil];
+
+	  
+}
+
+void backwardRegistrationBilinearFunctionGlobal
 (
 		const float *in_g,
 		const float *flow1_g,
@@ -142,33 +186,27 @@ __global__ void backwardRegistrationBilinearFunctionGlobal
 		float hy
 )
 {
-	const int x = blockIdx.x * blockDim.x + threadIdx.x;
-	const int y = blockIdx.y * blockDim.y + threadIdx.y;
-  
-  // check if x is within the boundaries
-  if (!(x < nx && y < ny)) {
-    return;
-  }
-  
-  const float xx = (float)x+flow1_g[y*pitchf1_in+x]/hx;
-  const float yy = (float)y+flow2_g[y*pitchf1_in+x]/hy;
-  
-  int xxFloor = (int)floor(xx);
-  int yyFloor = (int)floor(yy);
-  
-  int xxCeil = xxFloor == nx-1 ? xxFloor : xxFloor+1;
-  int yyCeil = yyFloor == ny-1 ? yyFloor : yyFloor+1;
-  
-  float xxRest = xx - (float)xxFloor;
-  float yyRest = yy - (float)yyFloor;
-
-  out_g[y*pitchf1_out+x] =
-      (xx < 0.0f || yy < 0.0f || xx > (float)(nx-1) || yy > (float)(ny-1))
-      ? constant_g[y*pitchf1_in+x] :
-    (1.0f-xxRest)*(1.0f-yyRest) * in_g[yyFloor * pitchf1_in + xxFloor]
-        + xxRest*(1.0f-yyRest)  * in_g[yyFloor * pitchf1_in + xxCeil]
-        + (1.0f-xxRest)*yyRest  * in_g[yyCeil  * pitchf1_in + xxFloor]
-        + xxRest * yyRest       * in_g[yyCeil  * pitchf1_in + xxCeil];
+	
+	  int ngx = (nx%LO_BW) ? ((nx/LO_BW)+1) : (nx/LO_BW);
+	  int ngy = (ny%LO_BH) ? ((ny/LO_BH)+1) : (ny/LO_BH);
+	  dim3 dimGrid(ngx,ngy);
+	  dim3 dimBlock(LO_BW,LO_BH);
+	  
+		backwardRegistrationBilinearFunctionGlobalGpu<<< dimGrid,dimBlock >>>
+		(
+				in_g,
+				flow1_g,
+				flow2_g,
+				out_g,
+				constant_g,
+				nx,
+				ny,
+				pitchf1_in,
+				pitchf1_out,
+				hx,
+				hy
+		);
+	  
 }
 
 void backwardRegistrationBilinearFunctionTex
