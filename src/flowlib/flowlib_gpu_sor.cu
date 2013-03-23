@@ -818,9 +818,9 @@ float FlowLibGpuSOR::computeFlow() {
 
     if (_verbose) fprintf(stderr, "\tTexture binding started\n");
 
-    bind_textures(_I1pyramid->level[rec_depth], _I2pyramid->level[rec_depth], 
-      nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
-    textures_flow_sor_initialized = true;
+        bind_textures(_I1pyramid->level[rec_depth], _I2pyramid->level[rec_depth], 
+          nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
+        textures_flow_sor_initialized = true;
 
     if (_verbose) fprintf(stderr, "\tTexture binding complete\n");
 
@@ -901,17 +901,17 @@ float FlowLibGpuSOR::computeFlow() {
       }
 
       // set all derivatives to 0
-      setKernel <<<dimGrid,dimBlock>>>(_u1lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
-      setKernel <<<dimGrid,dimBlock>>>(_u2lvl, nx_fine, ny_fine, _pitchf1, 0.0f);
+      setKernel <<<dimGrid,dimBlock>>>(_u1lvl, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth], 0.0f);
+      setKernel <<<dimGrid,dimBlock>>>(_u2lvl, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth], 0.0f);
 
       sorflow_gpu_nonlinear_warp_level(_u1_g, _u2_g, _u1lvl, _u2lvl, _b1,
-          _b2, _penDat, _penReg, nx_fine, ny_fine, _pitchf1, hx_fine,
+          _b2, _penDat, _penReg, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth], hx_fine,
           hy_fine, lambda, _overrelaxation, _oi, _ii, _dat_epsilon,
           _reg_epsilon);
       
       // apply the update
       add_flow_fields <<<dimGrid,dimBlock>>>
-        (_u1lvl, _u2lvl, _u1_g, _u2_g, nx_fine, ny_fine, _pitchf1);
+        (_u1lvl, _u2lvl, _u1_g, _u2_g, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
 
 	}
 	else {
