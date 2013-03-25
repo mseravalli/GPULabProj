@@ -757,11 +757,15 @@ void sorflow_gpu_nonlinear_warp_level
         ( bu_g, bv_g, penaltyd_g, penaltyr_g, du_g, dv_g, nx, ny, hx, hy, 
           lambda, overrelaxation, red, pitchf1 );
   
+      cutilSafeCall( cudaThreadSynchronize()) ;
+      
       red = 1;
       sorflow_nonlinear_warp_sor_shared <<<dimGrid,dimBlock>>>
         ( bu_g, bv_g, penaltyd_g, penaltyr_g, du_g, dv_g, nx, ny, hx, hy, 
           lambda, overrelaxation, red, pitchf1 );
-  
+      
+      cutilSafeCall( cudaThreadSynchronize()) ;
+      
     }
 
   }
@@ -842,10 +846,10 @@ float FlowLibGpuSOR::computeFlow() {
   				_u1_g,
   				nx_coarse,
   				ny_coarse,
-  				_I2pyramid->pitch[rec_depth+1],
+  				_pitchf1,//_I2pyramid->pitch[rec_depth+1],
   				nx_fine,
   				ny_fine,
-  				_I2pyramid->pitch[rec_depth],
+  				_pitchf1,//_I2pyramid->pitch[rec_depth],
   				_b1
   		);
   		resampleAreaParallelSeparate
@@ -854,10 +858,10 @@ float FlowLibGpuSOR::computeFlow() {
   				_u2_g,
   				nx_coarse,
   				ny_coarse,
-  				_I2pyramid->pitch[rec_depth+1],
+  				_pitchf1,//_I2pyramid->pitch[rec_depth+1],
   				nx_fine,
   				ny_fine,
-  				_I2pyramid->pitch[rec_depth],
+  				_pitchf1,//_I2pyramid->pitch[rec_depth],
   				_b2
   		);
 		}
@@ -885,14 +889,14 @@ float FlowLibGpuSOR::computeFlow() {
           nx_fine,
           ny_fine,
           _I2pyramid->pitch[rec_depth],
-          _I1pyramid->pitch[rec_depth],
+          _pitchf1,//_I1pyramid->pitch[rec_depth],
           hx_fine,
           hy_fine
       );
       
       if (_verbose)	fprintf(stderr, "\tBack Reg complete\n");
 
-      update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
+      update_textures_flow_sor(_I2warp, nx_fine, ny_fine,_pitchf1);// _I1pyramid->pitch[rec_depth]);
 
       if (_debug) {
         sprintf(_debugbuffer, "debug/CW2 %i.png", rec_depth);
@@ -905,13 +909,13 @@ float FlowLibGpuSOR::computeFlow() {
       setKernel <<<dimGrid,dimBlock>>>(_u2lvl, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth], 0.0f);
 
       sorflow_gpu_nonlinear_warp_level(_u1_g, _u2_g, _u1lvl, _u2lvl, _b1,
-          _b2, _penDat, _penReg, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth], hx_fine,
+          _b2, _penDat, _penReg, nx_fine, ny_fine, _pitchf1/*_I1pyramid->pitch[rec_depth]*/, hx_fine,
           hy_fine, lambda, _overrelaxation, _oi, _ii, _dat_epsilon,
           _reg_epsilon);
       
       // apply the update
       add_flow_fields <<<dimGrid,dimBlock>>>
-        (_u1lvl, _u2lvl, _u1_g, _u2_g, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
+        (_u1lvl, _u2lvl, _u1_g, _u2_g, nx_fine, ny_fine, _pitchf1);//_I1pyramid->pitch[rec_depth]);
 
 	}
 	else {
