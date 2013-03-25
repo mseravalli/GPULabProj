@@ -318,8 +318,7 @@ __global__ void resampleAreaParallelSeparateGpu_y
 	out_g[p] = 0.0f;
 
 	if (top > 0.0f) {
-		out_g[p] += in_g[(int) (floor(py)) * pitchf1 + x] * top
-				* scalefactor;
+		out_g[p] += in_g[(int) (floor(py)) * pitchf1 + x] * top * scalefactor;
 		py += 1.0f;
 	}
 	while (midy > 0.0f) {
@@ -328,8 +327,7 @@ __global__ void resampleAreaParallelSeparateGpu_y
 		midy -= 1.0f;
 	}
 	if (bottom > RESAMPLE_EPSILON) {
-		out_g[p] += in_g[(int) (floor(py)) * pitchf1 + x] * bottom
-				* scalefactor;
+		out_g[p] += in_g[(int) (floor(py)) * pitchf1 + x] * bottom * scalefactor;
 	}
 	
 }
@@ -357,15 +355,17 @@ void resampleAreaParallelSeparate
 						max(nx_in, nx_out) * sizeof(float), max(ny_in, ny_out)));
 		pitchf1_out = iPitchBytes / sizeof(float);
 	}
-
-	int ngx = (nx_out % LO_BW) ? ((nx_out / LO_BW) + 1) : (nx_out / LO_BW);
-	int ngy = (ny_out % LO_BH) ? ((ny_out / LO_BH) + 1) : (ny_out / LO_BH);
-	dim3 dimGrid(ngx, ngy);
-	dim3 dimBlock(LO_BW, LO_BH);
 	float hx = (float) (nx_in) / (float) (nx_out);
 	float hy = (float) (ny_in) / (float) (ny_out);
 
-  resampleAreaParallelSeparateGpu_x <<< dimGrid,dimBlock >>>
+	int ngx_resx = (nx_out % LO_BW) ? ((nx_out / LO_BW) + 1) : (nx_out / LO_BW);
+	int ngy_resx = (ny_in % LO_BH) ? ((ny_in / LO_BH) + 1) : (ny_in / LO_BH);
+	dim3 dimGrid_resx(ngx_resx, ngy_resx);
+	dim3 dimBlock_resx(LO_BW, LO_BH);
+
+  fprintf(stderr, "in (%d,%d) -> out(%d,%d) \n", nx_in, ny_in, nx_out, ny_out);
+
+  resampleAreaParallelSeparateGpu_x <<< dimGrid_resx,dimBlock_resx >>>
 		  (
 		  		in_g,
 		  		help_g,
@@ -376,7 +376,12 @@ void resampleAreaParallelSeparate
 		  		pitchf1_out,
 		  		(float)(nx_out)/(float)(nx_in) 
 		  );
-  resampleAreaParallelSeparateGpu_y <<< dimGrid,dimBlock >>>
+
+	int ngx_resy = (nx_out % LO_BW) ? ((nx_out / LO_BW) + 1) : (nx_out / LO_BW);
+	int ngy_resy = (ny_out % LO_BH) ? ((ny_out / LO_BH) + 1) : (ny_out / LO_BH);
+	dim3 dimGrid_resy(ngx_resy, ngy_resy);
+	dim3 dimBlock_resy(LO_BW, LO_BH);
+  resampleAreaParallelSeparateGpu_y <<< dimGrid_resy,dimBlock_resy >>>
 		  (
 				help_g,
 		  		out_g,
@@ -386,7 +391,6 @@ void resampleAreaParallelSeparate
 		  		pitchf1_out,
 		  		scalefactor*(float)(ny_out)/(float)(ny_in) 
 		  );
-
 }
 
 void resampleAreaParallelSeparateAdjoined
