@@ -73,9 +73,7 @@ __device__ float atomicAdd(float* address, double val)
 #endif
 
 
-//NOTE global was added to the function signature
-//TODO add texture!!
-__global__ void backwardRegistrationBilinearValueTex
+void backwardRegistrationBilinearValueTex
 (
 		const float *in_g,
 		const float *flow1_g,
@@ -90,42 +88,8 @@ __global__ void backwardRegistrationBilinearValueTex
 		float hy
 )
 {
-	const int x = blockIdx.x * blockDim.x + threadIdx.x;
-	const int y = blockIdx.y * blockDim.y + threadIdx.y;
-  
-  // check if x is within the boundaries
-  if (!(x < nx && y < ny)) {
-    return;
-  }
-
-	float hx_1 = 1.0f/hx;
-	float hy_1 = 1.0f/hy;
-  float ii_fp = x+(flow1_g[y*pitchf1_in+x]*hx_1);
-  float jj_fp = y+(flow2_g[y*pitchf1_in+x]*hy_1);
-  
-  if((ii_fp < 0.0f) || (jj_fp < 0.0f)
-  			 || (ii_fp > (float)(nx-1)) || (jj_fp > (float)(ny-1))){
-  	out_g[y*pitchf1_out+x] = value;
-  }
-  else if(!isfinite(ii_fp) || !isfinite(jj_fp)){
-  	out_g[y*pitchf1_out+x] = value;
-  }
-  else{
-  	int xx = (int)floor(ii_fp);
-  	int yy = (int)floor(jj_fp);
-  
-  	int xx1 = xx == nx-1 ? xx : xx+1;
-  	int yy1 = yy == ny-1 ? yy : yy+1;
-  
-  	float xx_rest = ii_fp - (float)xx;
-  	float yy_rest = jj_fp - (float)yy;
-  
-  	out_g[y*pitchf1_out+x] = (1.0f-xx_rest)*(1.0f-yy_rest) * in_g[yy   * pitchf1_in + xx]
-  		                     + xx_rest*(1.0f-yy_rest)        * in_g[yy   * pitchf1_in + xx1]
-  		                     + (1.0f-xx_rest)*yy_rest        * in_g[(yy1)* pitchf1_in + xx]
-  		                     + xx_rest * yy_rest             * in_g[(yy1)* pitchf1_in + xx1];
-  }
-
+	// ### Implement me
+  fprintf(stderr, "\nERROR this function is not yet implemented\n");
 }
 
 __global__ void backwardRegistrationBilinearFunctionGlobalGpu

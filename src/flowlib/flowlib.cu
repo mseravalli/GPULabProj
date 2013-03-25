@@ -57,6 +57,9 @@ FlowLib(par_nx,par_ny),
 _u1_g(NULL), _u2_g(NULL), _colorOutput_g(NULL),_pitchf1(0),_pitchf3(0),
 firstImageSet(false)
 {
+  if(_debug) {
+    _debugbuffer = new char[100];
+  }
 	fprintf(stderr,"\nFlowLibGpu: Allocating Image Pyramids...");
 	_I1pyramid = new ImagePyramidGpu(_nx,_ny,1,SCALE_FACTOR);
 	_I2pyramid = new ImagePyramidGpu(_nx,_ny,1,SCALE_FACTOR);
