@@ -363,8 +363,6 @@ void resampleAreaParallelSeparate
 	dim3 dimGrid_resx(ngx_resx, ngy_resx);
 	dim3 dimBlock_resx(LO_BW, LO_BH);
 
-  fprintf(stderr, "in (%d,%d) -> out(%d,%d) \n", nx_in, ny_in, nx_out, ny_out);
-
   resampleAreaParallelSeparateGpu_x <<< dimGrid_resx,dimBlock_resx >>>
 		  (
 		  		in_g,
