@@ -20,7 +20,7 @@
 #ifndef FLOWLIB_HPP_
 #define FLOWLIB_HPP_
 
-#define FLOW_DEBUG 0
+#define FLOW_DEBUG 1
 #define START_LEVEL 5
 #define END_LEVEL 0
 #define OUTER_ITERATIONS_INIT 50

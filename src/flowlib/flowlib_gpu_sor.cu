@@ -641,10 +641,8 @@ __global__ void sorflow_nonlinear_warp_sor_shared
 		
 		// TODO: this part of code is developed under the assumption that _I1pyramid->level[rec_depth][y*nx_fine+x] in cpu code
 		// represents the tex2D(tex_flow_sor_I1, xx, yy)
-		float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) +
-						tex2D(tex_flow_sor_I1, xx1, yy)- tex2D(tex_flow_sor_I1, xx_1, yy))*hx_1;
-		float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +
-						tex2D(tex_flow_sor_I1, xx, yy1)- tex2D(tex_flow_sor_I1, xx, yy_1))*hy_1;
+		float Ix = 0.5f*(tex2D(tex_flow_sor_I2, xx1, yy) - tex2D(tex_flow_sor_I2, xx_1, yy) +	tex2D(tex_flow_sor_I1, xx1, yy)           - tex2D(tex_flow_sor_I1, xx_1, yy))*hx_1;
+		float Iy = 0.5f*(tex2D(tex_flow_sor_I2, xx, yy1) - tex2D(tex_flow_sor_I2, xx, yy_1) +	tex2D(tex_flow_sor_I1, xx, yy1)           - tex2D(tex_flow_sor_I1, xx, yy_1))*hy_1;
 		
 		float xp = x<nx-1 ? (s_penaltyr[tx1][ty] + s_penaltyr[tx][ty])*0.5f*hx_2 : 0.0f;
 		float xm = x>0    ? (s_penaltyr[tx_1][ty]+ s_penaltyr[tx][ty])*0.5f*hx_2 : 0.0f;
@@ -770,7 +768,6 @@ void sorflow_gpu_nonlinear_warp_level
 
 
 float FlowLibGpuSOR::computeFlow() {
-	_verbose = true;
 	float lambda = _lambda * 255.0f;
 	int max_rec_depth;
 	int warp_max_levels;
@@ -825,17 +822,23 @@ float FlowLibGpuSOR::computeFlow() {
     if (_verbose) fprintf(stderr, "\tTexture binding complete\n");
 
 		if (_debug) {
+      _I1 = new float[nx_fine * ny_fine];
+      _I2 = new float[nx_fine * ny_fine];
+
 			sprintf(_debugbuffer, "debug/CI1 %i.png", rec_depth);
-			saveFloatImage(_debugbuffer, _I1pyramid->level[rec_depth], nx_fine,
-					ny_fine, 1, 1.0f, -1.0f);
+      cuda_copy_d2h_2D(_I1pyramid->level[rec_depth], _I1,	nx_fine, ny_fine, 1, sizeof(float), _I1pyramid->pitch[rec_depth]);
+  		saveFloatImage(_debugbuffer, _I1, nx_fine,	ny_fine, 1, 1.0f, -1.0f);
+
 			sprintf(_debugbuffer, "debug/CI2 %i.png", rec_depth);
-			saveFloatImage(_debugbuffer, _I2pyramid->level[rec_depth], nx_fine,
-					ny_fine, 1, 1.0f, -1.0f);
+      cuda_copy_d2h_2D(_I2pyramid->level[rec_depth], _I2,	nx_fine, ny_fine, 1, sizeof(float), _I2pyramid->pitch[rec_depth]);
+  		saveFloatImage(_debugbuffer, _I2, nx_fine,	ny_fine, 1, 1.0f, -1.0f);
+      delete [] _I1;
+      delete [] _I2;
 		}
 
-		if (_verbose) fprintf(stderr, "\tResampling started\n");
-
 		if (rec_depth < max_rec_depth) {
+      if (_verbose) fprintf(stderr, "\tResampling started\n");
+
   		resampleAreaParallelSeparate
   		(
   				_u1_g,
@@ -860,10 +863,9 @@ float FlowLibGpuSOR::computeFlow() {
   				_I2pyramid->pitch[rec_depth],
   				_b2
   		);
-		}
 
-		if (_verbose)
-			fprintf(stderr, "\tResampling complete\n");
+      if (_verbose)	fprintf(stderr, "\tResampling complete\n");
+		}
 
     if (rec_depth >= _end_level) {
 
@@ -895,9 +897,11 @@ float FlowLibGpuSOR::computeFlow() {
       update_textures_flow_sor(_I2warp, nx_fine, ny_fine, _I1pyramid->pitch[rec_depth]);
 
       if (_debug) {
+        _I2 = new float[nx_fine * ny_fine];
         sprintf(_debugbuffer, "debug/CW2 %i.png", rec_depth);
-        saveFloatImage(_debugbuffer, _I2warp, nx_fine, ny_fine, 1,
-            1.0f, -1.0f);
+        cuda_copy_d2h_2D(_I2warp, _I2,	nx_fine, ny_fine, 1, sizeof(float), _I2pyramid->pitch[rec_depth]);
+        saveFloatImage(_debugbuffer, _I2, nx_fine, ny_fine, 1, 1.0f, -1.0f);
+        delete [] _I2;
       }
 
       // set all derivatives to 0
